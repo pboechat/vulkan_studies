@@ -4,11 +4,12 @@ project(framework C CXX)
 
 find_package(Vulkan REQUIRED)
 
-file(GLOB HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/include/framework/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h")
-file(GLOB SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+file(GLOB HEADERS "${PROJECT_SOURCE_DIR}/include/framework/*.h" "${PROJECT_SOURCE_DIR}/src/*.h")
+file(GLOB SOURCES "${PROJECT_SOURCE_DIR}/src/*.cpp")
 
 include_directories(
 	${Vulkan_INCLUDE_DIRS}
+	${PROJECT_SOURCE_DIR}/include
 )
 
 source_group("include" FILES ${HEADERS})
