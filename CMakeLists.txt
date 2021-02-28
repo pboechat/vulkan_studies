@@ -25,4 +25,4 @@ foreach(CMAKE_CONFIGURATION_TYPE ${CMAKE_CONFIGURATION_TYPES})
 endforeach(CMAKE_CONFIGURATION_TYPE CMAKE_CONFIGURATION_TYPES)
 
 add_subdirectory(framework)
-add_subdirectory(chapter1)
+add_subdirectory(sample)

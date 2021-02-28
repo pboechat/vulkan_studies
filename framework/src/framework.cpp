@@ -1,7 +1,28 @@
 #include <framework/framework.h>
 
+#if defined _WIN32 || defined _WIN64
+#include <WinUser.h>
+#endif
+
+#include <cstdlib>
+
 namespace framework
 {
+	void fail(const char* msg)
+	{
+#if defined _WIN32 || defined _WIN64
+		MessageBox(nullptr, msg, "FAILURE", MB_ICONERROR | MB_OK);
+#endif
+		exit(-1);
+	}
+
+	void warn(const char* msg)
+	{
+#if defined _WIN32 || defined _WIN64
+		MessageBox(nullptr, msg, "WARNING", MB_ICONWARNING | MB_OK);
+#endif
+	}
+
 	const char* getErrorString(VkResult errorCode)
 	{
 		switch (errorCode)
@@ -34,6 +55,15 @@ namespace framework
 		default:
 			return "UNKNOWN_ERROR";
 		}
+	}
+
+	bool bitscan(unsigned long mask, unsigned long& index)
+	{
+#if defined _WIN32 || defined _WIN64
+		return _BitScanForward64(&index, mask);
+#else
+# error don't know how to implement bitscan
+#endif
 	}
 
 }
