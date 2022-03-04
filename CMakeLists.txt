@@ -24,5 +24,5 @@ foreach(CMAKE_CONFIGURATION_TYPE ${CMAKE_CONFIGURATION_TYPES})
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CMAKE_CONFIGURATION_TYPE} ${LIBS})
 endforeach(CMAKE_CONFIGURATION_TYPE CMAKE_CONFIGURATION_TYPES)
 
-add_subdirectory(framework)
+add_subdirectory(vkfw)
 add_subdirectory(sample)
