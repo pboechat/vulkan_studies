@@ -106,13 +106,23 @@ namespace vkfw
 
 	Result Application::createSurface()
 	{
-#if __linux__ && !__ANDROID__
+#if defined _WIN32 || defined _WIN64
+		VkWin32SurfaceCreateInfoKHR surfaceCreateInfo;
+		surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+		surfaceCreateInfo.pNext = nullptr;
+		surfaceCreateInfo.flags = 0;
+		surfaceCreateInfo.hinstance = m_hInstance;
+		surfaceCreateInfo.hwnd = m_hWnd;
+		vkfwSafeVkCall(vkCreateWin32SurfaceKHR(m_instance, &surfaceCreateInfo, nullptr, &m_surface));
+		return sc_success;
+#elif __linux__ && !__ANDROID__
 		VkXlibSurfaceCreateInfoKHR surfaceCreateInfo;
 		surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
 		surfaceCreateInfo.pNext = nullptr;
 		surfaceCreateInfo.dpy = m_display;
 		surfaceCreateInfo.window = m_window;
-		vkfwSafeVkCall(vkCreateXlibSurfaceKHR(m_instance, &surfaceCreateInfo, nullptr, &m_surface)) return sc_success;
+		vkfwSafeVkCall(vkCreateXlibSurfaceKHR(m_instance, &surfaceCreateInfo, nullptr, &m_surface));
+		return sc_success;
 #else
 #error "don't know how to create presentation surface"
 #endif
@@ -260,6 +270,16 @@ namespace vkfw
 			return "invalid height";
 		}
 
+		VkSurfaceTransformFlagBitsKHR preTransform;
+		if ((surfaceCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR) != 0)
+		{
+			preTransform = VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR;
+		}
+		else
+		{
+			preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+		}
+
 		auto swapChainCount = std::max(std::min(sc_maxSwapChainCount, surfaceCapabilities.maxImageCount), surfaceCapabilities.minImageCount);
 
 		uint32_t surfaceFormatsCount = 0;
@@ -291,7 +311,7 @@ namespace vkfw
 		swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		swapChainCreateInfo.queueFamilyIndexCount = 0;
 		swapChainCreateInfo.pQueueFamilyIndices = nullptr;
-		swapChainCreateInfo.preTransform = VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR;
+		swapChainCreateInfo.preTransform = preTransform;
 		swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 		swapChainCreateInfo.presentMode = presentModes[0];
 		swapChainCreateInfo.clipped = VK_TRUE;
@@ -352,7 +372,25 @@ namespace vkfw
 	void Application::run()
 	{
 		m_running = true;
-#if __linux__ && !__ANDROID__
+#if defined _WIN32 || defined _WIN64
+		while (m_running)
+		{
+			update();
+			render();
+			SwapBuffers(m_hDc);
+			MSG msg;
+			while (PeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE))
+			{
+				if (!GetMessage(&msg, NULL, 0, 0))
+				{
+					m_running = false;
+					break;
+				}
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
+		}
+#elif __linux__ && !__ANDROID__
 		XEvent event;
 		while (m_running)
 		{
@@ -393,9 +431,87 @@ namespace vkfw
 #endif
 	}
 
+#if defined _WIN32 || defined _WIN64
+	LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		switch (uMsg)
+		{
+		case WM_CLOSE:
+			PostQuitMessage(0);
+			break;
+		case WM_KEYDOWN:
+			int fwKeys;
+			LPARAM keyData;
+			fwKeys = (int)wParam;
+			keyData = lParam;
+			switch (fwKeys)
+			{
+			case VK_ESCAPE:
+				PostQuitMessage(0);
+				break;
+			default:
+				break;
+			}
+			break;
+		default:
+			break;
+		}
+		return DefWindowProc(hWnd, uMsg, wParam, lParam);
+	}
+#endif
+
 	Result Application::initializePresentationLayer()
 	{
-#if __linux__ && !__ANDROID__
+#if defined _WIN32 || defined _WIN64
+		constexpr char *const c_className = "VkfwClass";
+		m_hInstance = GetModuleHandle(nullptr);
+		WNDCLASSEX windowClass;
+		windowClass.cbSize = sizeof(WNDCLASSEX);
+		windowClass.style = CS_HREDRAW | CS_VREDRAW;
+		windowClass.lpfnWndProc = wndProc;
+		windowClass.cbClsExtra = 0;
+		windowClass.cbWndExtra = 0;
+		windowClass.hInstance = m_hInstance;
+		windowClass.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+		windowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
+		windowClass.hbrBackground = nullptr;
+		windowClass.lpszMenuName = nullptr;
+		windowClass.lpszClassName = c_className;
+		windowClass.hIconSm = LoadIcon(nullptr, IDI_WINLOGO);
+		if (!RegisterClassEx(&windowClass))
+		{
+			return 0;
+		}
+		DWORD dwExStyle = WS_EX_APPWINDOW | WS_EX_WINDOWEDGE;
+		DWORD dwStyle = WS_OVERLAPPEDWINDOW;
+		RECT windowRect;
+		windowRect.left = (long)0;
+		windowRect.right = (long)m_width;
+		windowRect.top = (long)0;
+		windowRect.bottom = (long)m_height;
+		AdjustWindowRectEx(&windowRect, dwStyle, FALSE, dwExStyle);
+		m_hWnd = CreateWindowEx(
+			0,
+			c_className,
+			m_name.c_str(),
+			dwStyle | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+			0,
+			0,
+			windowRect.right - windowRect.left,
+			windowRect.bottom - windowRect.top,
+			nullptr,
+			nullptr,
+			m_hInstance,
+			nullptr);
+		if (!m_hWnd)
+		{
+			return "failed to create window";
+		}
+		m_hDc = GetDC(m_hWnd);
+		ShowWindow(m_hWnd, SW_SHOW);
+		UpdateWindow(m_hWnd);
+		return sc_success;
+#elif __linux__ && !__ANDROID__
 		m_display = XOpenDisplay(nullptr);
 		if (m_display == nullptr)
 		{
@@ -417,7 +533,13 @@ namespace vkfw
 
 	void Application::finalizePresentationLayer()
 	{
-#if __linux__ && !__ANDROID__
+#if defined _WIN32 || defined _WIN64
+		if (m_hWnd != nullptr)
+		{
+			DestroyWindow(m_hWnd);
+			m_hWnd = nullptr;
+		}
+#elif __linux__ && !__ANDROID__
 		if (m_display == nullptr)
 		{
 			return;

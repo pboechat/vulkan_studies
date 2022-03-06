@@ -54,7 +54,11 @@ namespace vkfw
 		uint32_t m_width{0};
 		uint32_t m_height{0};
 		bool m_running{false};
-#if __linux__ && !__ANDROID__
+#if defined _WIN32 || defined _WIN64
+		HINSTANCE m_hInstance{nullptr};
+		HWND m_hWnd{nullptr};
+		HDC m_hDc{nullptr};
+#elif __linux__ && !__ANDROID__
 		Display *m_display{nullptr};
 		Window m_window{None};
 		VisualID m_visualId{None};

@@ -2,6 +2,12 @@
 #define VKFW_H
 
 #if defined _WIN32 || defined _WIN64
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <X11/Xlib.h>
+#endif
+#if defined _WIN32 || defined _WIN64
 #define VK_USE_PLATFORM_WIN32_KHR
 #elif __linux__ && !__ANDROID__
 #define VK_USE_PLATFORM_XLIB_KHR
@@ -10,10 +16,9 @@
 #endif
 #include <vulkan/vulkan.h>
 #if defined _WIN32 || defined _WIN64
-#include <windows.h>
+#define NOMINMAX
 #include <vulkan/vulkan_win32.h>
 #elif __linux__ && !__ANDROID__
-#include <X11/Xlib.h>
 #include <vulkan/vulkan_xlib.h>
 #endif
 
