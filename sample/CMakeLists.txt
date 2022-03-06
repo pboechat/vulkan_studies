@@ -1,9 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
 
-if(UNIX AND NOT APPLE)
-	set(LINUX TRUE)
-endif()
-
 project(sample C CXX)
 
 find_package(Vulkan REQUIRED)

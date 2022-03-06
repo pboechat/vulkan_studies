@@ -15,32 +15,34 @@ namespace vkfw
 	constexpr uint32_t Application::sc_invalidQueueIndex;
 	constexpr uint32_t Application::sc_maxSwapChainCount;
 
-	template <typename ListType, typename ElementType, typename ComparerType>
-	bool contains(const ListType &list, const ElementType *value, const ComparerType &comparer)
-	{
-		return std::find_if(list.begin(), list.end(), [value, comparer](const ElementType *otherValue)
-							{ return comparer(value, otherValue); }) != list.end();
-	}
+	template <typename AType>
+	struct _StrComparer;
 
-	bool strCmp(const char *a, const char *b)
+	template<>
+	struct _StrComparer<VkLayerProperties>
 	{
-		return strcmp(a, b) == 0;
-	}
-
-	void printPhysicalDevicePropertiesAndFeatures(const std::vector<VkPhysicalDevice> &physicalDevices)
-	{
-		for (auto &physicalDevice : physicalDevices)
+		static bool compare(const VkLayerProperties& a, const char* b)
 		{
-			VkPhysicalDeviceProperties properties;
-			vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-			// TODO:
-			std::cout << properties.deviceName << '\n';
-
-			VkPhysicalDeviceFeatures features;
-			vkGetPhysicalDeviceFeatures(physicalDevice, &features);
-
-			// TODO:
+			return strcmp(a.layerName, b) == 0;
 		}
+
+	};
+
+	template<>
+	struct _StrComparer<VkExtensionProperties>
+	{
+		static bool compare(const VkExtensionProperties& a, const char* b)
+		{
+			return strcmp(a.extensionName, b) == 0;
+		}
+
+	};
+
+	template <typename ElementType>
+	bool contains(const std::vector<ElementType> &vector, const char *value)
+	{
+		return std::find_if(vector.begin(), vector.end(), [&value](const auto &element)
+							{ return _StrComparer<ElementType>::compare(element, value); }) != vector.end();
 	}
 
 	Application::~Application()
@@ -59,39 +61,76 @@ namespace vkfw
 		applicationInfo.engineVersion = VK_MAKE_VERSION(vkfw::MajorVersion, vkfw::MinorVersion, vkfw::PatchVersion);
 		applicationInfo.apiVersion = VK_API_VERSION_1_1;
 
-		std::vector<const char *> layersNames;
 #if _DEBUG
-		if (!contains(layersNames, "VK_LAYER_KHRONOS_validation", strCmp))
+		uint32_t availableLayerCount;
+		vkEnumerateInstanceLayerProperties(&availableLayerCount, nullptr);
+		std::vector<VkLayerProperties> availableLayers(availableLayerCount);
+		vkEnumerateInstanceLayerProperties(&availableLayerCount, &availableLayers[0]);
+
+		std::cout << "Available layers:" << std::endl;
+		for (const auto &layer : availableLayers)
 		{
-			layersNames.emplace_back("VK_LAYER_KHRONOS_validation");
+			std::cout << layer.layerName << std::endl;
 		}
 #endif
-		std::vector<const char *> extensionNames;
 
-		extensionNames.emplace_back("VK_KHR_surface");
+		std::vector<const char *> usedLayers;
+#if _DEBUG
+		if (contains(availableLayers, "VK_LAYER_KHRONOS_validation"))
+		{
+			usedLayers.emplace_back("VK_LAYER_KHRONOS_validation");
+		}
+		else
+		{
+			std::cout << "VK_LAYER_KHRONOS_validation not available, ignoring it" << std::endl;
+		}
+#endif
+
+		uint32_t availableExtensionCount;
+		vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, nullptr);
+		std::vector<VkExtensionProperties> availableExtensions(availableExtensionCount);
+		vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, &availableExtensions[0]);
+
+#if _DEBUG
+		std::cout << "Available extensions:" << std::endl;
+		for (const auto &extension : availableExtensions)
+		{
+			std::cout << extension.extensionName << std::endl;
+		}
+#endif
+
+		std::vector<const char *> extensions;
+
+		if (!contains(availableExtensions, "VK_KHR_surface"))
+		{
+			fail("couldn't find VK_KHR_surface extension");
+		}
+		extensions.emplace_back("VK_KHR_surface");
+
+		const char* platformSurfaceExtName =
 #if defined _WIN32 || defined _WIN64
-		if (!contains(extensionNames, "VK_KHR_win32_surface", strCmp))
-		{
-			extensionNames.emplace_back("VK_KHR_win32_surface");
-		}
+			"VK_KHR_win32_surface"
 #elif __linux__ && !__ANDROID__
-		if (!contains(extensionNames, VK_KHR_XLIB_SURFACE_EXTENSION_NAME, strCmp))
-		{
-			extensionNames.emplace_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
-		}
+			VK_KHR_XLIB_SURFACE_EXTENSION_NAME
 #else
 #error "don't know how to enable surfaces in the current platform"
 #endif
+		;
+		if (!contains(availableExtensions, platformSurfaceExtName))
+		{
+			fail("couldn't find platform surface extension");
+		}
+		extensions.emplace_back(platformSurfaceExtName);
 
 		VkInstanceCreateInfo instanceCreateInfo;
 		instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		instanceCreateInfo.pNext = nullptr;
 		instanceCreateInfo.flags = 0;
 		instanceCreateInfo.pApplicationInfo = &applicationInfo;
-		instanceCreateInfo.enabledLayerCount = (uint32_t)layersNames.size();
-		instanceCreateInfo.ppEnabledLayerNames = layersNames.empty() ? nullptr : &layersNames[0];
-		instanceCreateInfo.enabledExtensionCount = (uint32_t)extensionNames.size();
-		instanceCreateInfo.ppEnabledExtensionNames = extensionNames.empty() ? nullptr : &extensionNames[0];
+		instanceCreateInfo.enabledLayerCount = (uint32_t)usedLayers.size();
+		instanceCreateInfo.ppEnabledLayerNames = usedLayers.empty() ? nullptr : &usedLayers[0];
+		instanceCreateInfo.enabledExtensionCount = (uint32_t)extensions.size();
+		instanceCreateInfo.ppEnabledExtensionNames = extensions.empty() ? nullptr : &extensions[0];
 
 		vkfwCheckVkResult(vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance));
 	}
@@ -146,7 +185,13 @@ namespace vkfw
 		vkfwCheckVkResult(vkEnumeratePhysicalDevices(m_instance, &numPhysicalDevices, &physicalDevices[0]));
 
 #if _DEBUG
-		printPhysicalDevicePropertiesAndFeatures(physicalDevices);
+		std::cout << "Devices:" << std::endl;
+		for (auto &physicalDevice : physicalDevices)
+		{
+			VkPhysicalDeviceProperties properties;
+			vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+			std::cout << properties.deviceName << std::endl;
+		}
 #endif
 
 		if (physicalDevices.size() == 0)
@@ -197,9 +242,9 @@ namespace vkfw
 		deviceQueueCreateInfo.queueCount = 1;
 		deviceQueueCreateInfo.pQueuePriorities = sc_queuePriorities;
 
-		std::vector<const char *> extensionNames;
+		std::vector<const char *> extensions;
 
-		extensionNames.push_back("VK_KHR_swapchain");
+		extensions.push_back("VK_KHR_swapchain");
 
 		VkDeviceCreateInfo deviceCreateInfo;
 		deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -207,8 +252,8 @@ namespace vkfw
 		deviceCreateInfo.flags = 0;
 		deviceCreateInfo.queueCreateInfoCount = queueCount;
 		deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfos[0];
-		deviceCreateInfo.enabledExtensionCount = (uint32_t)extensionNames.size();
-		deviceCreateInfo.ppEnabledExtensionNames = extensionNames.empty() ? nullptr : &extensionNames[0];
+		deviceCreateInfo.enabledExtensionCount = (uint32_t)extensions.size();
+		deviceCreateInfo.ppEnabledExtensionNames = extensions.empty() ? nullptr : &extensions[0];
 		deviceCreateInfo.enabledLayerCount = 0;
 		deviceCreateInfo.ppEnabledLayerNames = nullptr;
 		deviceCreateInfo.pEnabledFeatures = nullptr;
