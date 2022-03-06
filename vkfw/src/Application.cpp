@@ -288,14 +288,27 @@ namespace vkfw
 		std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatsCount);
 		vkfwSafeVkCall(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &surfaceFormatsCount, &surfaceFormats[0]));
 
-		uint32_t presentModesCount;
-		vkfwSafeVkCall(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModesCount, nullptr));
-		if (presentModesCount == 0)
+		VkPresentModeKHR presentMode;
 		{
-			return "no present mode";
+			uint32_t presentModesCount;
+			vkfwSafeVkCall(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModesCount, nullptr));
+			if (presentModesCount == 0)
+			{
+				return "no present mode";
+			}
+			std::vector<VkPresentModeKHR> presentModes(presentModesCount);
+			vkfwSafeVkCall(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModesCount, &presentModes[0]));
+			auto it = std::find_if(presentModes.begin(), presentModes.end(), [](const auto &presentMode)
+								   { return presentMode == VK_PRESENT_MODE_MAILBOX_KHR; });
+			if (it != presentModes.end())
+			{
+				presentMode = VK_PRESENT_MODE_MAILBOX_KHR; // supposedly, > swapchain image count
+			}
+			else
+			{
+				presentMode = VK_PRESENT_MODE_FIFO_KHR;
+			}
 		}
-		std::vector<VkPresentModeKHR> presentModes(presentModesCount);
-		vkfwSafeVkCall(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModesCount, &presentModes[0]));
 
 		VkSwapchainCreateInfoKHR swapChainCreateInfo;
 		swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -313,7 +326,7 @@ namespace vkfw
 		swapChainCreateInfo.pQueueFamilyIndices = nullptr;
 		swapChainCreateInfo.preTransform = preTransform;
 		swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		swapChainCreateInfo.presentMode = presentModes[0];
+		swapChainCreateInfo.presentMode = presentMode;
 		swapChainCreateInfo.clipped = VK_TRUE;
 		swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
