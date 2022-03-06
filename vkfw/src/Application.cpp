@@ -12,6 +12,9 @@
 
 namespace vkfw
 {
+	constexpr uint32_t Application::sc_invalidQueueIndex;
+	constexpr uint32_t Application::sc_maxSwapChainCount;
+
 	template <typename ListType, typename ElementType, typename ComparerType>
 	bool contains(const ListType &list, const ElementType *value, const ComparerType &comparer)
 	{

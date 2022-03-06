@@ -32,8 +32,8 @@ namespace vkfw
 		virtual void update() = 0;
 
 	private:
-		constexpr static uint32_t sc_invalidQueueIndex = ~0u;
-		constexpr static uint32_t sc_maxSwapChainCount = 3;
+		static constexpr uint32_t sc_invalidQueueIndex = ~0;
+		static constexpr uint32_t sc_maxSwapChainCount = 3;
 
 		void initializePresentationLayer();
 		void finalizePresentationLayer();
