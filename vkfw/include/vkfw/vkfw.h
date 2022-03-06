@@ -63,4 +63,22 @@ namespace vkfw
 		}                                              \
 	}
 
+#define vkfwCheckResult(call)                 \
+	{                                         \
+		Result __result;                      \
+		if (!(result = call))                 \
+		{                                     \
+			vkfw::fail(result.failureReason); \
+		}                                     \
+	}
+
+#define vkfwCheckVkResult(vkCall)                           \
+	{                                                       \
+		VkResult __vkResult;                                \
+		if ((__vkResult = vkCall) != VK_SUCCESS)            \
+		{                                                   \
+			vkfw::fail(vkfw::getVkErrorString(__vkResult)); \
+		}                                                   \
+	}
+
 #endif

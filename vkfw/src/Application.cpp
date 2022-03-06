@@ -45,7 +45,7 @@ namespace vkfw
 		finalize();
 	}
 
-	Result Application::createInstance()
+	void Application::createInstance()
 	{
 		VkApplicationInfo applicationInfo;
 		applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -90,9 +90,7 @@ namespace vkfw
 		instanceCreateInfo.enabledExtensionCount = (uint32_t)extensionNames.size();
 		instanceCreateInfo.ppEnabledExtensionNames = extensionNames.empty() ? nullptr : &extensionNames[0];
 
-		vkfwSafeVkCall(vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance));
-
-		return sc_success;
+		vkfwCheckVkResult(vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance));
 	}
 
 	void Application::destroyInstance()
@@ -104,7 +102,7 @@ namespace vkfw
 		}
 	}
 
-	Result Application::createSurface()
+	void Application::createSurface()
 	{
 #if defined _WIN32 || defined _WIN64
 		VkWin32SurfaceCreateInfoKHR surfaceCreateInfo;
@@ -113,16 +111,14 @@ namespace vkfw
 		surfaceCreateInfo.flags = 0;
 		surfaceCreateInfo.hinstance = m_hInstance;
 		surfaceCreateInfo.hwnd = m_hWnd;
-		vkfwSafeVkCall(vkCreateWin32SurfaceKHR(m_instance, &surfaceCreateInfo, nullptr, &m_surface));
-		return sc_success;
+		vkfwCheckVkResult(vkCreateWin32SurfaceKHR(m_instance, &surfaceCreateInfo, nullptr, &m_surface));
 #elif __linux__ && !__ANDROID__
 		VkXlibSurfaceCreateInfoKHR surfaceCreateInfo;
 		surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
 		surfaceCreateInfo.pNext = nullptr;
 		surfaceCreateInfo.dpy = m_display;
 		surfaceCreateInfo.window = m_window;
-		vkfwSafeVkCall(vkCreateXlibSurfaceKHR(m_instance, &surfaceCreateInfo, nullptr, &m_surface));
-		return sc_success;
+		vkfwCheckVkResult(vkCreateXlibSurfaceKHR(m_instance, &surfaceCreateInfo, nullptr, &m_surface));
 #else
 #error "don't know how to create presentation surface"
 #endif
@@ -137,14 +133,14 @@ namespace vkfw
 		}
 	}
 
-	Result Application::selectPhysicalDevice()
+	void Application::selectPhysicalDevice()
 	{
 		uint32_t numPhysicalDevices;
-		vkfwSafeVkCall(vkEnumeratePhysicalDevices(m_instance, &numPhysicalDevices, nullptr));
+		vkfwCheckVkResult(vkEnumeratePhysicalDevices(m_instance, &numPhysicalDevices, nullptr));
 
 		std::vector<VkPhysicalDevice> physicalDevices;
 		physicalDevices.resize(numPhysicalDevices);
-		vkfwSafeVkCall(vkEnumeratePhysicalDevices(m_instance, &numPhysicalDevices, &physicalDevices[0]));
+		vkfwCheckVkResult(vkEnumeratePhysicalDevices(m_instance, &numPhysicalDevices, &physicalDevices[0]));
 
 #if _DEBUG
 		printPhysicalDevicePropertiesAndFeatures(physicalDevices);
@@ -152,7 +148,7 @@ namespace vkfw
 
 		if (physicalDevices.size() == 0)
 		{
-			return "no physical device found";
+			fail("no physical device found");
 		}
 
 		std::vector<VkQueueFamilyProperties> queueFamiliesProperties;
@@ -166,26 +162,24 @@ namespace vkfw
 			for (uint32_t queueFamilyIdx = 0; queueFamilyIdx < queueFamiliesCount; ++queueFamilyIdx)
 			{
 				auto &queueFamilyProperties = queueFamiliesProperties[queueFamilyIdx];
-				if ((queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
+				// not supporting separate graphics and present queues at the moment
+				// see: https://github.com/KhronosGroup/Vulkan-Docs/issues/1234
+				if ((queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 && supportsPresentation(physicalDevice_, queueFamilyIdx))
 				{
-					m_graphicsQueueIndex = queueFamilyIdx;
+					m_graphicsAndPresentQueueIndex = queueFamilyIdx;
 				}
-				if (supportsPresentation(physicalDevice_, queueFamilyIdx))
-				{
-					m_presentationQueueIndex = queueFamilyIdx;
-				}
-				if (m_graphicsQueueIndex != sc_invalidQueueIndex && m_presentationQueueIndex != sc_invalidQueueIndex)
+				if (m_graphicsAndPresentQueueIndex != sc_invalidQueueIndex)
 				{
 					m_physicalDevice = physicalDevice_;
-					return sc_success;
+					return;
 				}
 			}
 		}
 
-		return "couldn't find a suitable physical device";
+		fail("couldn't find a suitable physical device");
 	}
 
-	Result Application::createDeviceAndGetQueues()
+	void Application::createDeviceAndGetQueues()
 	{
 		static const float sc_queuePriorities[] = {1.f};
 
@@ -196,20 +190,9 @@ namespace vkfw
 		deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		deviceQueueCreateInfo.pNext = nullptr;
 		deviceQueueCreateInfo.flags = 0;
-		deviceQueueCreateInfo.queueFamilyIndex = m_graphicsQueueIndex;
+		deviceQueueCreateInfo.queueFamilyIndex = m_graphicsAndPresentQueueIndex;
 		deviceQueueCreateInfo.queueCount = 1;
 		deviceQueueCreateInfo.pQueuePriorities = sc_queuePriorities;
-
-		if (m_graphicsQueueIndex != m_presentationQueueIndex)
-		{
-			auto &deviceQueueCreateInfo = deviceQueueCreateInfos[queueCount++];
-			deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-			deviceQueueCreateInfo.pNext = nullptr;
-			deviceQueueCreateInfo.flags = 0;
-			deviceQueueCreateInfo.queueFamilyIndex = m_presentationQueueIndex;
-			deviceQueueCreateInfo.queueCount = 1;
-			deviceQueueCreateInfo.pQueuePriorities = sc_queuePriorities;
-		}
 
 		std::vector<const char *> extensionNames;
 
@@ -227,19 +210,9 @@ namespace vkfw
 		deviceCreateInfo.ppEnabledLayerNames = nullptr;
 		deviceCreateInfo.pEnabledFeatures = nullptr;
 
-		vkfwSafeVkCall(vkCreateDevice(m_physicalDevice, &deviceCreateInfo, nullptr, &m_device));
+		vkfwCheckVkResult(vkCreateDevice(m_physicalDevice, &deviceCreateInfo, nullptr, &m_device));
 
-		vkGetDeviceQueue(m_device, m_graphicsQueueIndex, 0, &m_graphicsQueue);
-		if (m_graphicsQueueIndex != m_presentationQueueIndex)
-		{
-			vkGetDeviceQueue(m_device, m_presentationQueueIndex, 0, &m_presentationQueue);
-		}
-		else
-		{
-			m_presentationQueue = m_graphicsQueue;
-		}
-
-		return sc_success;
+		vkGetDeviceQueue(m_device, m_graphicsAndPresentQueueIndex, 0, &m_graphicsAndPresentQueue);
 	}
 
 	void Application::destroyDeviceAndClearQueues()
@@ -249,25 +222,23 @@ namespace vkfw
 			vkDestroyDevice(m_device, nullptr);
 			m_device = VK_NULL_HANDLE;
 		}
-		m_graphicsQueue = VK_NULL_HANDLE;
-		m_presentationQueue = VK_NULL_HANDLE;
-		m_graphicsQueueIndex = sc_invalidQueueIndex;
-		m_presentationQueueIndex = sc_invalidQueueIndex;
+		m_graphicsAndPresentQueue = VK_NULL_HANDLE;
+		m_graphicsAndPresentQueueIndex = sc_invalidQueueIndex;
 	}
 
-	Result Application::createSwapChainAndGetImages()
+	void Application::createSwapChainAndGetImages()
 	{
 		VkSurfaceCapabilitiesKHR surfaceCapabilities;
-		vkfwSafeVkCall(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_surface, &surfaceCapabilities));
+		vkfwCheckVkResult(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_surface, &surfaceCapabilities));
 
 		if (m_width < surfaceCapabilities.minImageExtent.width || m_width > surfaceCapabilities.maxImageExtent.width)
 		{
-			return "invalid width";
+			fail("invalid width");
 		}
 
 		if (m_height < surfaceCapabilities.minImageExtent.height || m_height > surfaceCapabilities.maxImageExtent.height)
 		{
-			return "invalid height";
+			fail("invalid height");
 		}
 
 		VkSurfaceTransformFlagBitsKHR preTransform;
@@ -283,21 +254,21 @@ namespace vkfw
 		auto swapChainCount = std::max(std::min(sc_maxSwapChainCount, surfaceCapabilities.maxImageCount), surfaceCapabilities.minImageCount);
 
 		uint32_t surfaceFormatsCount = 0;
-		vkfwSafeVkCall(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &surfaceFormatsCount, nullptr));
+		vkfwCheckVkResult(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &surfaceFormatsCount, nullptr));
 
 		std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatsCount);
-		vkfwSafeVkCall(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &surfaceFormatsCount, &surfaceFormats[0]));
+		vkfwCheckVkResult(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &surfaceFormatsCount, &surfaceFormats[0]));
 
 		VkPresentModeKHR presentMode;
 		{
 			uint32_t presentModesCount;
-			vkfwSafeVkCall(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModesCount, nullptr));
+			vkfwCheckVkResult(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModesCount, nullptr));
 			if (presentModesCount == 0)
 			{
-				return "no present mode";
+				fail("no present mode");
 			}
 			std::vector<VkPresentModeKHR> presentModes(presentModesCount);
-			vkfwSafeVkCall(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModesCount, &presentModes[0]));
+			vkfwCheckVkResult(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModesCount, &presentModes[0]));
 			auto it = std::find_if(presentModes.begin(), presentModes.end(), [](const auto &presentMode)
 								   { return presentMode == VK_PRESENT_MODE_MAILBOX_KHR; });
 			if (it != presentModes.end())
@@ -330,13 +301,11 @@ namespace vkfw
 		swapChainCreateInfo.clipped = VK_TRUE;
 		swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
-		vkfwSafeVkCall(vkCreateSwapchainKHR(m_device, &swapChainCreateInfo, nullptr, &m_swapChain));
+		vkfwCheckVkResult(vkCreateSwapchainKHR(m_device, &swapChainCreateInfo, nullptr, &m_swapChain));
 
-		vkfwSafeVkCall(vkGetSwapchainImagesKHR(m_device, m_swapChain, &swapChainCount, nullptr));
+		vkfwCheckVkResult(vkGetSwapchainImagesKHR(m_device, m_swapChain, &swapChainCount, nullptr));
 		m_swapChainImages.resize(swapChainCount);
-		vkfwSafeVkCall(vkGetSwapchainImagesKHR(m_device, m_swapChain, &swapChainCount, &m_swapChainImages[0]));
-
-		return sc_success;
+		vkfwCheckVkResult(vkGetSwapchainImagesKHR(m_device, m_swapChain, &swapChainCount, &m_swapChainImages[0]));
 	}
 
 	void Application::destroySwapChainAndClearImages()
@@ -349,37 +318,77 @@ namespace vkfw
 		m_swapChainImages.clear();
 	}
 
+	void Application::createSemaphores()
+	{
+		VkSemaphoreCreateInfo semaphoreCreateInfo;
+		semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		semaphoreCreateInfo.pNext = nullptr;
+		semaphoreCreateInfo.flags = 0;
+		vkfwCheckVkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_acquireSwapChainImageSemaphore));
+		vkfwCheckVkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_renderFinishedSemaphore));
+	}
+
+	void Application::destroySemaphores()
+	{
+		if (m_acquireSwapChainImageSemaphore != VK_NULL_HANDLE)
+		{
+			vkDestroySemaphore(m_device, m_acquireSwapChainImageSemaphore, nullptr);
+			m_acquireSwapChainImageSemaphore = VK_NULL_HANDLE;
+		}
+		if (m_renderFinishedSemaphore != VK_NULL_HANDLE)
+		{
+			vkDestroySemaphore(m_device, m_renderFinishedSemaphore, nullptr);
+			m_renderFinishedSemaphore = VK_NULL_HANDLE;
+		}
+	}
+
+	void Application::createCommandPoolAndCommandBuffers()
+	{
+		VkCommandPoolCreateInfo commandPoolCreateInfo;
+		commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		commandPoolCreateInfo.pNext = nullptr;
+		commandPoolCreateInfo.flags = 0;
+		commandPoolCreateInfo.queueFamilyIndex = m_graphicsAndPresentQueueIndex;
+		vkfwCheckVkResult(vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPool));
+
+		VkCommandBufferAllocateInfo commandBufferAllocateInfo;
+		commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		commandBufferAllocateInfo.pNext = nullptr;
+		commandBufferAllocateInfo.commandPool = m_commandPool;
+		commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		commandBufferAllocateInfo.commandBufferCount = (uint32_t)m_swapChainImages.size();
+		m_commandBuffers.resize(m_swapChainImages.size());
+		vkfwCheckVkResult(vkAllocateCommandBuffers(m_device, &commandBufferAllocateInfo, &m_commandBuffers[0]));
+	}
+
+	void Application::destroyCommandPoolAndCommandBuffers()
+	{
+		if (m_commandPool != VK_NULL_HANDLE)
+		{
+			if (!m_commandBuffers.empty())
+			{
+				vkFreeCommandBuffers(m_device, m_commandPool, (uint32_t)m_commandBuffers.size(), &m_commandBuffers[0]);
+				m_commandBuffers.clear();
+			}
+			vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+			m_commandPool = VK_NULL_HANDLE;
+		}
+	}
+
 	void Application::initialize(const char *name, uint32_t width, uint32_t height)
 	{
 		m_name = name;
 		m_width = width;
 		m_height = height;
-		Result result;
-		if (!(result = initializePresentationLayer()))
-		{
-			fail(result.failureReason);
-		}
-		if (!(result = createInstance()))
-		{
-			fail(result.failureReason);
-		}
-		if (!(result = createSurface()))
-		{
-			fail(result.failureReason);
-		}
-		if (!(result = selectPhysicalDevice()))
-		{
-			fail(result.failureReason);
-		}
+		initializePresentationLayer();
+		createInstance();
+		createSurface();
+		selectPhysicalDevice();
 		vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &m_physicalDeviceMemoryProperties);
-		if (!(result = createDeviceAndGetQueues()))
-		{
-			fail(result.failureReason);
-		}
-		if (!(result = createSwapChainAndGetImages()))
-		{
-			fail(result.failureReason);
-		}
+		createDeviceAndGetQueues();
+		createSwapChainAndGetImages();
+		createSemaphores();
+		createCommandPoolAndCommandBuffers();
 	}
 
 	void Application::run()
@@ -390,7 +399,7 @@ namespace vkfw
 		{
 			update();
 			render();
-			SwapBuffers(m_hDc);
+			present();
 			MSG msg;
 			while (PeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE))
 			{
@@ -409,6 +418,7 @@ namespace vkfw
 		{
 			update();
 			render();
+			present();
 			XNextEvent(m_display, &event);
 			if (event.type == KeyPress)
 			{
@@ -431,6 +441,7 @@ namespace vkfw
 #else
 #error "don't know how to run"
 #endif
+		vkDeviceWaitIdle(m_device);
 	}
 
 	bool Application::supportsPresentation(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIdx) const
@@ -473,7 +484,7 @@ namespace vkfw
 	}
 #endif
 
-	Result Application::initializePresentationLayer()
+	void Application::initializePresentationLayer()
 	{
 #if defined _WIN32 || defined _WIN64
 		constexpr char *const c_className = "VkfwClass";
@@ -493,7 +504,7 @@ namespace vkfw
 		windowClass.hIconSm = LoadIcon(nullptr, IDI_WINLOGO);
 		if (!RegisterClassEx(&windowClass))
 		{
-			return 0;
+			fail("couldn't register window class");
 		}
 		DWORD dwExStyle = WS_EX_APPWINDOW | WS_EX_WINDOWEDGE;
 		DWORD dwStyle = WS_OVERLAPPEDWINDOW;
@@ -516,19 +527,17 @@ namespace vkfw
 			nullptr,
 			m_hInstance,
 			nullptr);
-		if (!m_hWnd)
+		if (m_hWnd == nullptr)
 		{
-			return "failed to create window";
+			fail("couldn't create window");
 		}
-		m_hDc = GetDC(m_hWnd);
 		ShowWindow(m_hWnd, SW_SHOW);
 		UpdateWindow(m_hWnd);
-		return sc_success;
 #elif __linux__ && !__ANDROID__
 		m_display = XOpenDisplay(nullptr);
 		if (m_display == nullptr)
 		{
-			return "cannot open display";
+			fail("couldn't open display");
 		}
 		int defaultScreen = DefaultScreen(m_display);
 		m_window = XCreateSimpleWindow(m_display, RootWindow(m_display, defaultScreen), 0, 0, m_width, m_height, 1, BlackPixel(m_display, defaultScreen), WhitePixel(m_display, defaultScreen));
@@ -538,7 +547,6 @@ namespace vkfw
 		m_visualId = XVisualIDFromVisual(DefaultVisual(m_display, defaultScreen));
 		m_deleteWindowAtom = XInternAtom(m_display, "WM_DELETE_WINDOW", False);
 		XSetWMProtocols(m_display, m_window, &m_deleteWindowAtom, 1);
-		return sc_success;
 #else
 #error "don't know how to initialize presentation layer"
 #endif
@@ -571,6 +579,8 @@ namespace vkfw
 
 	void Application::finalize()
 	{
+		destroyCommandPoolAndCommandBuffers();
+		destroySemaphores();
 		destroySwapChainAndClearImages();
 		destroyDeviceAndClearQueues();
 		destroySurface();
@@ -578,11 +588,110 @@ namespace vkfw
 		finalizePresentationLayer();
 	}
 
-	void Application::update()
-	{
-	}
-
 	void Application::render()
 	{
+		auto result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_acquireSwapChainImageSemaphore, VK_NULL_HANDLE, &m_swapChainIndex);
+		switch (result)
+		{
+		case VK_SUCCESS:
+		case VK_SUBOPTIMAL_KHR:
+			break;
+		case VK_ERROR_OUT_OF_DATE_KHR:
+			fail("outdated swapchain");
+			break;
+		default:
+			fail("couldn't acquire new swapchain image");
+			break;
+		}
+
+		VkCommandBufferBeginInfo commandBufferBeginInfo;
+		commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		commandBufferBeginInfo.pNext = nullptr;
+		commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+		commandBufferBeginInfo.pInheritanceInfo = nullptr;
+		vkBeginCommandBuffer(m_commandBuffers[m_swapChainIndex], &commandBufferBeginInfo);
+
+		VkImageSubresourceRange imageSubresourceRange;
+		imageSubresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		imageSubresourceRange.baseMipLevel = 0;
+		imageSubresourceRange.levelCount = 1;
+		imageSubresourceRange.baseArrayLayer = 0;
+		imageSubresourceRange.layerCount = 1;
+
+		VkImageMemoryBarrier presentToClearBarrier;
+		presentToClearBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		presentToClearBarrier.pNext = nullptr;
+		presentToClearBarrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		presentToClearBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		presentToClearBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		presentToClearBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		presentToClearBarrier.srcQueueFamilyIndex = m_graphicsAndPresentQueueIndex;
+		presentToClearBarrier.dstQueueFamilyIndex = m_graphicsAndPresentQueueIndex;
+		presentToClearBarrier.image = m_swapChainImages[m_swapChainIndex];
+		presentToClearBarrier.subresourceRange = imageSubresourceRange;
+
+		vkCmdPipelineBarrier(m_commandBuffers[m_swapChainIndex], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &presentToClearBarrier);
+
+		VkClearColorValue clearColor = {{1.0f, 0.8f, 0.4f, 0.0f}};
+		vkCmdClearColorImage(m_commandBuffers[m_swapChainIndex], m_swapChainImages[m_swapChainIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &imageSubresourceRange);
+
+		VkImageMemoryBarrier clearToPresentBarrier;
+		clearToPresentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		clearToPresentBarrier.pNext = nullptr;
+		clearToPresentBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		clearToPresentBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		clearToPresentBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		clearToPresentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		clearToPresentBarrier.srcQueueFamilyIndex = m_graphicsAndPresentQueueIndex;
+		clearToPresentBarrier.dstQueueFamilyIndex = m_graphicsAndPresentQueueIndex;
+		clearToPresentBarrier.image = m_swapChainImages[m_swapChainIndex];
+		clearToPresentBarrier.subresourceRange = imageSubresourceRange;
+
+		vkCmdPipelineBarrier(m_commandBuffers[m_swapChainIndex], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &clearToPresentBarrier);
+
+		vkfwCheckVkResult(vkEndCommandBuffer(m_commandBuffers[m_swapChainIndex]))
+	}
+
+	void Application::present()
+	{
+		VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		VkSubmitInfo submitInfo;
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.pNext = nullptr;
+		submitInfo.waitSemaphoreCount = 1;
+		submitInfo.pWaitSemaphores = &m_acquireSwapChainImageSemaphore;
+		submitInfo.pWaitDstStageMask = &waitDstStageMask;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &m_commandBuffers[m_swapChainIndex];
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &m_renderFinishedSemaphore;
+		if (vkQueueSubmit(m_graphicsAndPresentQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+		{
+			fail("couldn't submit commands");
+		}
+
+		VkPresentInfoKHR presentInfo;
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfo.pNext = nullptr;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = &m_renderFinishedSemaphore;
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &m_swapChain;
+		presentInfo.pImageIndices = &m_swapChainIndex;
+		presentInfo.pResults = nullptr;
+
+		auto result = vkQueuePresentKHR(m_graphicsAndPresentQueue, &presentInfo);
+		switch (result)
+		{
+		case VK_SUCCESS:
+		case VK_SUBOPTIMAL_KHR:
+			break;
+		case VK_ERROR_OUT_OF_DATE_KHR:
+			fail("outdated swapchain");
+			break;
+		default:
+			fail("couldn't present");
+			break;
+		}
 	}
 }

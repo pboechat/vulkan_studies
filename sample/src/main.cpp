@@ -1,8 +1,8 @@
-#include <vkfw/Application.h>
+#include "SampleApplication.h"
 
 int main(int argc, char** argv)
 {
-	vkfw::Application app;
+	SampleApplication app;
 	app.initialize(
 		"sample",
 		1024,

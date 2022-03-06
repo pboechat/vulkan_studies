@@ -30,6 +30,3 @@ if(LINUX)
 	target_link_libraries(${PROJECT_NAME} ${X11_LIBRARIES})
 endif()
 
-set(${PROJECT_NAME}_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/include 
-	CACHE INTERNAL "${PROJECT_NAME}: includes" FORCE)
-

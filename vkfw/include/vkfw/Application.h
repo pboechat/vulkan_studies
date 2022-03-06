@@ -29,26 +29,31 @@ namespace vkfw
 		}
 
 	protected:
-		virtual void update();
+		virtual void update() = 0;
 
 	private:
 		constexpr static uint32_t sc_invalidQueueIndex = ~0u;
 		constexpr static uint32_t sc_maxSwapChainCount = 3;
 
-		Result initializePresentationLayer();
+		void initializePresentationLayer();
 		void finalizePresentationLayer();
-		Result createInstance();
+		void createInstance();
 		void destroyInstance();
-		Result createSurface();
+		void createSurface();
 		void destroySurface();
-		Result selectPhysicalDevice();
+		void selectPhysicalDevice();
 		bool supportsPresentation(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIdx) const;
-		Result createDeviceAndGetQueues();
+		void createDeviceAndGetQueues();
 		void destroyDeviceAndClearQueues();
-		Result createSwapChainAndGetImages();
+		void createSwapChainAndGetImages();
 		void destroySwapChainAndClearImages();
+		void createSemaphores();
+		void destroySemaphores();
+		void createCommandPoolAndCommandBuffers();
+		void destroyCommandPoolAndCommandBuffers();
 		void finalize();
 		void render();
+		void present();
 
 		std::string m_name;
 		uint32_t m_width{0};
@@ -57,7 +62,6 @@ namespace vkfw
 #if defined _WIN32 || defined _WIN64
 		HINSTANCE m_hInstance{nullptr};
 		HWND m_hWnd{nullptr};
-		HDC m_hDc{nullptr};
 #elif __linux__ && !__ANDROID__
 		Display *m_display{nullptr};
 		Window m_window{None};
@@ -69,12 +73,15 @@ namespace vkfw
 		VkPhysicalDevice m_physicalDevice{VK_NULL_HANDLE};
 		VkPhysicalDeviceMemoryProperties m_physicalDeviceMemoryProperties;
 		VkDevice m_device{VK_NULL_HANDLE};
-		uint32_t m_graphicsQueueIndex{sc_invalidQueueIndex};
-		uint32_t m_presentationQueueIndex{sc_invalidQueueIndex};
-		VkQueue m_graphicsQueue{VK_NULL_HANDLE};
-		VkQueue m_presentationQueue{VK_NULL_HANDLE};
+		uint32_t m_graphicsAndPresentQueueIndex{sc_invalidQueueIndex};
+		VkQueue m_graphicsAndPresentQueue{VK_NULL_HANDLE};
 		VkSwapchainKHR m_swapChain;
 		std::vector<VkImage> m_swapChainImages;
+		uint32_t m_swapChainIndex{0};
+		VkSemaphore m_acquireSwapChainImageSemaphore{VK_NULL_HANDLE};
+		VkSemaphore m_renderFinishedSemaphore{VK_NULL_HANDLE};
+		VkCommandPool m_commandPool{VK_NULL_HANDLE};
+		std::vector<VkCommandBuffer> m_commandBuffers;
 	};
 
 }
