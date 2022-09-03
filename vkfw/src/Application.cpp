@@ -39,10 +39,10 @@ namespace vkfw
 	};
 
 	template <typename ElementType>
-	bool contains(const std::vector<ElementType> &vector, const char *value)
+	bool contains(const std::vector<ElementType>& vector, const char* value)
 	{
-		return std::find_if(vector.begin(), vector.end(), [&value](const auto &element)
-							{ return _StrComparer<ElementType>::compare(element, value); }) != vector.end();
+		return std::find_if(vector.begin(), vector.end(), [&value](const auto& element)
+			{ return _StrComparer<ElementType>::compare(element, value); }) != vector.end();
 	}
 
 	Application::~Application()
@@ -68,13 +68,13 @@ namespace vkfw
 		vkEnumerateInstanceLayerProperties(&availableLayerCount, &availableLayers[0]);
 
 		std::cout << "Available layers:" << std::endl;
-		for (const auto &layer : availableLayers)
+		for (const auto& layer : availableLayers)
 		{
 			std::cout << layer.layerName << std::endl;
 		}
 #endif
 
-		std::vector<const char *> usedLayers;
+		std::vector<const char*> usedLayers;
 #if _DEBUG
 		if (contains(availableLayers, "VK_LAYER_KHRONOS_validation"))
 		{
@@ -93,13 +93,13 @@ namespace vkfw
 
 #if _DEBUG
 		std::cout << "Available extensions:" << std::endl;
-		for (const auto &extension : availableExtensions)
+		for (const auto& extension : availableExtensions)
 		{
 			std::cout << extension.extensionName << std::endl;
 		}
 #endif
 
-		std::vector<const char *> extensions;
+		std::vector<const char*> extensions;
 
 		if (!contains(availableExtensions, "VK_KHR_surface"))
 		{
@@ -115,7 +115,7 @@ namespace vkfw
 #else
 #error "don't know how to enable surfaces in the current platform"
 #endif
-		;
+			;
 		if (!contains(availableExtensions, platformSurfaceExtName))
 		{
 			fail("couldn't find platform surface extension");
@@ -186,7 +186,7 @@ namespace vkfw
 
 #if _DEBUG
 		std::cout << "Devices:" << std::endl;
-		for (auto &physicalDevice : physicalDevices)
+		for (auto& physicalDevice : physicalDevices)
 		{
 			VkPhysicalDeviceProperties properties;
 			vkGetPhysicalDeviceProperties(physicalDevice, &properties);
@@ -200,7 +200,7 @@ namespace vkfw
 		}
 
 		std::vector<VkQueueFamilyProperties> queueFamiliesProperties;
-		for (auto &physicalDevice_ : physicalDevices)
+		for (auto& physicalDevice_ : physicalDevices)
 		{
 			uint32_t queueFamiliesCount;
 			vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice_, &queueFamiliesCount, nullptr);
@@ -209,7 +209,7 @@ namespace vkfw
 
 			for (uint32_t queueFamilyIdx = 0; queueFamilyIdx < queueFamiliesCount; ++queueFamilyIdx)
 			{
-				auto &queueFamilyProperties = queueFamiliesProperties[queueFamilyIdx];
+				auto& queueFamilyProperties = queueFamiliesProperties[queueFamilyIdx];
 				// not supporting separate graphics and present queues at the moment
 				// see: https://github.com/KhronosGroup/Vulkan-Docs/issues/1234
 				if ((queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 && supportsPresentation(physicalDevice_, queueFamilyIdx))
@@ -229,12 +229,12 @@ namespace vkfw
 
 	void Application::createDeviceAndGetQueues()
 	{
-		static const float sc_queuePriorities[] = {1.f};
+		static const float sc_queuePriorities[] = { 1.f };
 
 		uint32_t queueCount = 0;
 		VkDeviceQueueCreateInfo deviceQueueCreateInfos[2];
 
-		auto &deviceQueueCreateInfo = deviceQueueCreateInfos[queueCount++];
+		auto& deviceQueueCreateInfo = deviceQueueCreateInfos[queueCount++];
 		deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		deviceQueueCreateInfo.pNext = nullptr;
 		deviceQueueCreateInfo.flags = 0;
@@ -242,7 +242,7 @@ namespace vkfw
 		deviceQueueCreateInfo.queueCount = 1;
 		deviceQueueCreateInfo.pQueuePriorities = sc_queuePriorities;
 
-		std::vector<const char *> extensions;
+		std::vector<const char*> extensions;
 
 		extensions.push_back("VK_KHR_swapchain");
 
@@ -317,8 +317,8 @@ namespace vkfw
 			}
 			std::vector<VkPresentModeKHR> presentModes(presentModesCount);
 			vkfwCheckVkResult(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModesCount, &presentModes[0]));
-			auto it = std::find_if(presentModes.begin(), presentModes.end(), [](const auto &presentMode)
-								   { return presentMode == VK_PRESENT_MODE_MAILBOX_KHR; });
+			auto it = std::find_if(presentModes.begin(), presentModes.end(), [](const auto& presentMode)
+				{ return presentMode == VK_PRESENT_MODE_MAILBOX_KHR; });
 			if (it != presentModes.end())
 			{
 				presentMode = VK_PRESENT_MODE_MAILBOX_KHR; // supposedly, > swapchain image count
@@ -337,7 +337,7 @@ namespace vkfw
 		swapChainCreateInfo.minImageCount = swapChainCount;
 		swapChainCreateInfo.imageFormat = surfaceFormats[0].format;
 		swapChainCreateInfo.imageColorSpace = surfaceFormats[0].colorSpace;
-		swapChainCreateInfo.imageExtent = {m_width, m_height};
+		swapChainCreateInfo.imageExtent = { m_width, m_height };
 		swapChainCreateInfo.imageArrayLayers = 1;
 		swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -423,7 +423,7 @@ namespace vkfw
 		}
 	}
 
-	void Application::initialize(const char *name, uint32_t width, uint32_t height)
+	void Application::initialize(const char* name, uint32_t width, uint32_t height)
 	{
 		m_name = name;
 		m_width = width;
@@ -432,11 +432,17 @@ namespace vkfw
 		createInstance();
 		createSurface();
 		selectPhysicalDevice();
-		vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &m_physicalDeviceMemoryProperties);
+		getPhysicalDeviceMemoryProperties();
+
 		createDeviceAndGetQueues();
 		createSwapChainAndGetImages();
 		createSemaphores();
 		createCommandPoolAndCommandBuffers();
+	}
+
+	void Application::getPhysicalDeviceMemoryProperties()
+	{
+		vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &m_physicalDeviceMemoryProperties);
 	}
 
 	void Application::run()
@@ -470,7 +476,7 @@ namespace vkfw
 			XNextEvent(m_display, &event);
 			if (event.type == KeyPress)
 			{
-				char buf[128] = {0};
+				char buf[128] = { 0 };
 				KeySym keySym;
 				XLookupString(&event.xkey, buf, sizeof buf, &keySym, NULL);
 				if (keySym == XK_Escape)
@@ -535,7 +541,7 @@ namespace vkfw
 	void Application::initializePresentationLayer()
 	{
 #if defined _WIN32 || defined _WIN64
-		constexpr char *const c_className = "VkfwClass";
+		constexpr char* const c_className = "VkfwClass";
 		m_hInstance = GetModuleHandle(nullptr);
 		WNDCLASSEX windowClass;
 		windowClass.cbSize = sizeof(WNDCLASSEX);
@@ -680,7 +686,7 @@ namespace vkfw
 
 		vkCmdPipelineBarrier(m_commandBuffers[m_swapChainIndex], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &presentToClearBarrier);
 
-		VkClearColorValue clearColor = {{1.0f, 0.8f, 0.4f, 0.0f}};
+		VkClearColorValue clearColor = { {1.0f, 0.8f, 0.4f, 0.0f} };
 		vkCmdClearColorImage(m_commandBuffers[m_swapChainIndex], m_swapChainImages[m_swapChainIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &imageSubresourceRange);
 
 		VkImageMemoryBarrier clearToPresentBarrier;
