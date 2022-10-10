@@ -22,13 +22,14 @@
 #include <vulkan/vulkan_xlib.h>
 #endif
 
+#include <cstdint>
 #include <string>
 
 namespace vkfw
 {
-	constexpr int MajorVersion = 1;
-	constexpr int MinorVersion = 0;
-	constexpr int PatchVersion = 0;
+	constexpr uint32_t gc_majorVersion = 1;
+	constexpr uint32_t gc_minorVersion = 0;
+	constexpr uint32_t gc_patchVersion = 0;
 
 	struct Result
 	{
