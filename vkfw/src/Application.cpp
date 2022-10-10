@@ -40,13 +40,17 @@ namespace
 							{ return _StrComparer<ElementType>::compare(element, value); }) != vector.end();
 	}
 
-	bool supportsPresentation(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIdx, VkSurfaceKHR surface)
+	bool supportsPresentation(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIdx, VkSurfaceKHR surface,
+#if __linux__ && !__ANDROID__
+		Display* display, VisualID visualId
+#endif	
+	)
 	{
 		VkBool32 supportsPresentation_;
 #if defined _WIN32 || defined _WIN64
 		supportsPresentation_ = vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, queueFamilyIdx);
 #elif __linux__ && !__ANDROID__
-		supportsPresentation_ = vkGetPhysicalDeviceXlibPresentationSupportKHR(physicalDevice, queueFamilyIdx, m_display, m_visualId);
+		supportsPresentation_ = vkGetPhysicalDeviceXlibPresentationSupportKHR(physicalDevice, queueFamilyIdx, display, visualId);
 #else
 #error "don't know how to check presentation support"
 #endif
@@ -194,6 +198,7 @@ namespace vkfw
 		VkXlibSurfaceCreateInfoKHR surfaceCreateInfo;
 		surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
 		surfaceCreateInfo.pNext = nullptr;
+		surfaceCreateInfo.flags = 0;
 		surfaceCreateInfo.dpy = m_display;
 		surfaceCreateInfo.window = m_window;
 		vkfwCheckVkResult(vkCreateXlibSurfaceKHR(m_instance, &surfaceCreateInfo, nullptr, &m_surface));
@@ -248,7 +253,18 @@ namespace vkfw
 				auto &queueFamilyProperties = queueFamiliesProperties[queueFamilyIdx];
 				// not supporting separate graphics and present queues at the moment
 				// see: https://github.com/KhronosGroup/Vulkan-Docs/issues/1234
-				if ((queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 && supportsPresentation(physicalDevice_, queueFamilyIdx, m_surface))
+				if (
+					(queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 
+					&& supportsPresentation(
+						physicalDevice_
+						, queueFamilyIdx
+						, m_surface
+#if __linux__ && !__ANDROID__
+						, m_display
+						, m_visualId
+#endif
+					)
+				)
 				{
 					m_graphicsAndPresentQueueIndex = queueFamilyIdx;
 				}
@@ -335,8 +351,8 @@ namespace vkfw
 			preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 		}
 
-		m_settings.maxSimultaneousFrames = std::min(m_settings.maxSimultaneousFrames, surfaceCapabilities.maxImageCount);
-		auto swapChainCount = std::max(m_settings.maxSimultaneousFrames, surfaceCapabilities.minImageCount);
+		m_settings.maxSimultaneousFrames = std::max(std::min(m_settings.maxSimultaneousFrames, surfaceCapabilities.maxImageCount), surfaceCapabilities.minImageCount);
+		auto swapChainCount = m_settings.maxSimultaneousFrames;
 
 		uint32_t surfaceFormatsCount = 0;
 		vkfwCheckVkResult(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &surfaceFormatsCount, nullptr));
@@ -615,7 +631,7 @@ namespace vkfw
 		m_window = XCreateSimpleWindow(m_display, RootWindow(m_display, defaultScreen), 0, 0, m_width, m_height, 1, BlackPixel(m_display, defaultScreen), WhitePixel(m_display, defaultScreen));
 		XSelectInput(m_display, m_window, ExposureMask | KeyPressMask);
 		XMapWindow(m_display, m_window);
-		XStoreName(m_display, m_window, m_name.c_str());
+		XStoreName(m_display, m_window, m_settings.name.c_str());
 		m_visualId = XVisualIDFromVisual(DefaultVisual(m_display, defaultScreen));
 		m_deleteWindowAtom = XInternAtom(m_display, "WM_DELETE_WINDOW", False);
 		XSetWMProtocols(m_display, m_window, &m_deleteWindowAtom, 1);
