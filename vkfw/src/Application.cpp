@@ -42,8 +42,8 @@ namespace
 
 	bool supportsPresentation(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIdx, VkSurfaceKHR surface,
 #if __linux__ && !__ANDROID__
-		Display* display, VisualID visualId
-#endif	
+							  Display *display, VisualID visualId
+#endif
 	)
 	{
 		VkBool32 supportsPresentation_;
@@ -88,6 +88,8 @@ namespace vkfw
 		createSwapChainAndGetImages();
 		createSynchronizationObjects();
 		createCommandPoolAndCommandBuffers();
+
+		postInitialize();
 	}
 
 	void Application::createInstance()
@@ -254,17 +256,13 @@ namespace vkfw
 				// not supporting separate graphics and present queues at the moment
 				// see: https://github.com/KhronosGroup/Vulkan-Docs/issues/1234
 				if (
-					(queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 
-					&& supportsPresentation(
-						physicalDevice_
-						, queueFamilyIdx
-						, m_surface
+					(queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 &&
+					supportsPresentation(physicalDevice_, queueFamilyIdx, m_surface
 #if __linux__ && !__ANDROID__
-						, m_display
-						, m_visualId
+										 ,
+										 m_display, m_visualId
 #endif
-					)
-				)
+										 ))
 				{
 					m_graphicsAndPresentQueueIndex = queueFamilyIdx;
 				}
@@ -351,14 +349,16 @@ namespace vkfw
 			preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 		}
 
-		m_settings.maxSimultaneousFrames = std::max(std::min(m_settings.maxSimultaneousFrames, surfaceCapabilities.maxImageCount), surfaceCapabilities.minImageCount);
-		auto swapChainCount = m_settings.maxSimultaneousFrames;
+		m_maxSimultaneousFrames = std::max(std::min(m_settings.maxSimultaneousFrames, surfaceCapabilities.maxImageCount), surfaceCapabilities.minImageCount);
+		auto swapChainCount = m_maxSimultaneousFrames;
 
 		uint32_t surfaceFormatsCount = 0;
 		vkfwCheckVkResult(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &surfaceFormatsCount, nullptr));
 
 		std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatsCount);
 		vkfwCheckVkResult(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &surfaceFormatsCount, &surfaceFormats[0]));
+
+		m_swapChainSurfaceFormat = surfaceFormats[0];
 
 		VkPresentModeKHR presentMode;
 		{
@@ -388,8 +388,8 @@ namespace vkfw
 		swapChainCreateInfo.flags = 0;
 		swapChainCreateInfo.surface = m_surface;
 		swapChainCreateInfo.minImageCount = swapChainCount;
-		swapChainCreateInfo.imageFormat = surfaceFormats[0].format;
-		swapChainCreateInfo.imageColorSpace = surfaceFormats[0].colorSpace;
+		swapChainCreateInfo.imageFormat = m_swapChainSurfaceFormat.format;
+		swapChainCreateInfo.imageColorSpace = m_swapChainSurfaceFormat.colorSpace;
 		swapChainCreateInfo.imageExtent = {m_width, m_height};
 		swapChainCreateInfo.imageArrayLayers = 1;
 		swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -421,9 +421,9 @@ namespace vkfw
 
 	void Application::createSynchronizationObjects()
 	{
-		m_frameFences.resize(m_settings.maxSimultaneousFrames);
-		m_acquireSwapChainImageSemaphores.resize(m_settings.maxSimultaneousFrames);
-		m_renderFinishedSemaphores.resize(m_settings.maxSimultaneousFrames);
+		m_frameFences.resize(m_maxSimultaneousFrames);
+		m_acquireSwapChainImageSemaphores.resize(m_maxSimultaneousFrames);
+		m_submitFinishedSemaphores.resize(m_maxSimultaneousFrames);
 
 		VkFenceCreateInfo fenceInfo;
 		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -434,20 +434,20 @@ namespace vkfw
 		semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 		semaphoreCreateInfo.pNext = nullptr;
 		semaphoreCreateInfo.flags = 0;
-		for (uint32_t i = 0; i < m_settings.maxSimultaneousFrames; ++i)
+		for (uint32_t i = 0; i < m_maxSimultaneousFrames; ++i)
 		{
 			vkfwCheckVkResult(vkCreateFence(m_device, &fenceInfo, nullptr, &m_frameFences[i]));
 			vkfwCheckVkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_acquireSwapChainImageSemaphores[i]));
-			vkfwCheckVkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_renderFinishedSemaphores[i]));
+			vkfwCheckVkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_submitFinishedSemaphores[i]));
 		}
 	}
 
 	void Application::destroySynchronizationObjects()
 	{
-		for (uint32_t i = 0; i < m_settings.maxSimultaneousFrames; ++i)
+		for (uint32_t i = 0; i < m_maxSimultaneousFrames; ++i)
 		{
 			vkDestroySemaphore(m_device, m_acquireSwapChainImageSemaphores[i], nullptr);
-			vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
+			vkDestroySemaphore(m_device, m_submitFinishedSemaphores[i], nullptr);
 			vkDestroyFence(m_device, m_frameFences[i], nullptr);
 		}
 	}
@@ -466,8 +466,8 @@ namespace vkfw
 		commandBufferAllocateInfo.pNext = nullptr;
 		commandBufferAllocateInfo.commandPool = m_commandPool;
 		commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		commandBufferAllocateInfo.commandBufferCount = m_settings.maxSimultaneousFrames;
-		m_commandBuffers.resize(m_settings.maxSimultaneousFrames);
+		commandBufferAllocateInfo.commandBufferCount = m_maxSimultaneousFrames;
+		m_commandBuffers.resize(m_maxSimultaneousFrames);
 		vkfwCheckVkResult(vkAllocateCommandBuffers(m_device, &commandBufferAllocateInfo, &m_commandBuffers[0]));
 	}
 
@@ -496,9 +496,7 @@ namespace vkfw
 #if defined _WIN32 || defined _WIN64
 		while (m_running)
 		{
-			update();
-			render();
-			present();
+			runOneFrame();
 			MSG msg;
 			while (PeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE))
 			{
@@ -515,9 +513,7 @@ namespace vkfw
 		XEvent event;
 		while (m_running)
 		{
-			update();
-			render();
-			present();
+			runOneFrame();
 			XNextEvent(m_display, &event);
 			if (event.type == KeyPress)
 			{
@@ -541,6 +537,15 @@ namespace vkfw
 #error "don't know how to run"
 #endif
 		vkDeviceWaitIdle(m_device);
+
+		onStop();
+	}
+
+	void Application::runOneFrame()
+	{
+		update();
+		render();
+		present();
 	}
 
 #if defined _WIN32 || defined _WIN64
@@ -704,43 +709,7 @@ namespace vkfw
 		commandBufferBeginInfo.pInheritanceInfo = nullptr;
 		vkfwCheckVkResult(vkBeginCommandBuffer(m_commandBuffers[m_currentFrame], &commandBufferBeginInfo));
 
-		VkImageSubresourceRange imageSubresourceRange;
-		imageSubresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		imageSubresourceRange.baseMipLevel = 0;
-		imageSubresourceRange.levelCount = 1;
-		imageSubresourceRange.baseArrayLayer = 0;
-		imageSubresourceRange.layerCount = 1;
-
-		VkImageMemoryBarrier presentToClearBarrier;
-		presentToClearBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		presentToClearBarrier.pNext = nullptr;
-		presentToClearBarrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-		presentToClearBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		presentToClearBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		presentToClearBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		presentToClearBarrier.srcQueueFamilyIndex = m_graphicsAndPresentQueueIndex;
-		presentToClearBarrier.dstQueueFamilyIndex = m_graphicsAndPresentQueueIndex;
-		presentToClearBarrier.image = m_swapChainImages[m_currentFrame];
-		presentToClearBarrier.subresourceRange = imageSubresourceRange;
-
-		vkCmdPipelineBarrier(m_commandBuffers[m_currentFrame], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &presentToClearBarrier);
-
-		VkClearColorValue clearColor = {{1.0f, 0.8f, 0.4f, 0.0f}};
-		vkCmdClearColorImage(m_commandBuffers[m_currentFrame], m_swapChainImages[m_currentFrame], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &imageSubresourceRange);
-
-		VkImageMemoryBarrier clearToPresentBarrier;
-		clearToPresentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		clearToPresentBarrier.pNext = nullptr;
-		clearToPresentBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		clearToPresentBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-		clearToPresentBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		clearToPresentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-		clearToPresentBarrier.srcQueueFamilyIndex = m_graphicsAndPresentQueueIndex;
-		clearToPresentBarrier.dstQueueFamilyIndex = m_graphicsAndPresentQueueIndex;
-		clearToPresentBarrier.image = m_swapChainImages[m_currentFrame];
-		clearToPresentBarrier.subresourceRange = imageSubresourceRange;
-
-		vkCmdPipelineBarrier(m_commandBuffers[m_currentFrame], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &clearToPresentBarrier);
+		record(m_commandBuffers[m_currentFrame]);
 
 		vkfwCheckVkResult(vkEndCommandBuffer(m_commandBuffers[m_currentFrame]))
 	}
@@ -757,7 +726,7 @@ namespace vkfw
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &m_commandBuffers[m_currentFrame];
 		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
+		submitInfo.pSignalSemaphores = &m_submitFinishedSemaphores[m_currentFrame];
 		if (vkQueueSubmit(m_graphicsAndPresentQueue, 1, &submitInfo, m_frameFences[m_currentFrame]) != VK_SUCCESS)
 		{
 			fail("couldn't submit commands");
@@ -767,7 +736,7 @@ namespace vkfw
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.pNext = nullptr;
 		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
+		presentInfo.pWaitSemaphores = &m_submitFinishedSemaphores[m_currentFrame];
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &m_swapChain;
 		presentInfo.pImageIndices = &m_swapChainIndex;
@@ -787,6 +756,6 @@ namespace vkfw
 			break;
 		}
 
-		m_currentFrame = (m_currentFrame + 1) % m_settings.maxSimultaneousFrames;
+		m_currentFrame = (m_currentFrame + 1) % m_maxSimultaneousFrames;
 	}
 }
