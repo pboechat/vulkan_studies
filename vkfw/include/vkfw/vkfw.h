@@ -2,27 +2,37 @@
 #define VKFW_H
 
 #if defined _WIN32 || defined _WIN64
+#define vkfwWindows
+#elif __linux__ && !__ANDROID__
+#define vkfwLinux
+#endif
+
+#ifdef vkfwWindows
 #define NOMINMAX
 #include <windows.h>
 #else
 #include <X11/Xlib.h>
 #endif
-#if defined _WIN32 || defined _WIN64
+
+#if defined vkfwWindows
 #define VK_USE_PLATFORM_WIN32_KHR
-#elif __linux__ && !__ANDROID__
+#elif defined vkfwLinux
 #define VK_USE_PLATFORM_XLIB_KHR
 #else
 #error "unsupported plaform"
 #endif
+
 #include <vulkan/vulkan.h>
-#if defined _WIN32 || defined _WIN64
+
+#if defined vkfwWindows
 #define NOMINMAX
 #include <vulkan/vulkan_win32.h>
-#elif __linux__ && !__ANDROID__
+#elif defined vkfwLinux
 #include <vulkan/vulkan_xlib.h>
 #endif
 
 #include <cstdint>
+#include <cassert>
 #include <fstream>
 #include <vector>
 #include <string>
@@ -51,7 +61,7 @@ namespace vkfw
 
 	inline void fail(const char *msg)
 	{
-#if defined _WIN32 || defined _WIN64
+#ifdef vkfwWindows
 		MessageBox(nullptr, msg, "FAILURE", MB_ICONERROR | MB_OK);
 #else
 		printf("%s", msg);
@@ -61,7 +71,7 @@ namespace vkfw
 
 	inline void warn(const char *msg)
 	{
-#if defined _WIN32 || defined _WIN64
+#ifdef vkfwWindows
 		MessageBox(nullptr, msg, "WARNING", MB_ICONWARNING | MB_OK);
 #else
 		printf("%s", msg);
@@ -100,6 +110,7 @@ namespace vkfw
 			STR(ERROR_INVALID_SHADER_NV);
 #undef STR
 		default:
+			assert(false);
 			return "UNKNOWN_ERROR";
 		}
 	}

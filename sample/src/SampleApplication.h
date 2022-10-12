@@ -13,6 +13,9 @@ protected:
     void onStop() override;
 
 private:
+    VkShaderModule createShaderModule(const std::vector<char> &code) const;
+    void destroyShaderModule(VkShaderModule shaderModule) const;
+
     VkShaderModule m_vertModule{VK_NULL_HANDLE};
     VkShaderModule m_fragModule{VK_NULL_HANDLE};
     VkRenderPass m_renderPass{VK_NULL_HANDLE};
@@ -20,7 +23,4 @@ private:
     VkPipeline m_pipeline{VK_NULL_HANDLE};
     std::vector<VkImageView> m_swapChainImageViews;
     std::vector<VkFramebuffer> m_framebuffers;
-
-    VkShaderModule createShaderModule(const std::vector<char> &code) const;
-    void destroyShaderModule(VkShaderModule shaderModule) const;
 };

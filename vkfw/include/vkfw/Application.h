@@ -26,7 +26,11 @@ namespace vkfw
 	class Application
 	{
 	public:
+#if defined vkfwWindows
+		Application();
+#elif defined vkfwLinux
 		Application() = default;
+#endif
 		void initialize(const ApplicationSettings &settings);
 		virtual ~Application();
 
@@ -42,6 +46,7 @@ namespace vkfw
 		virtual void update() {}
 		virtual void record(VkCommandBuffer commandBuffer) {}
 		virtual void onStop() {}
+		virtual void onResize(uint32_t width, uint32_t height) {}
 
 		inline VkDevice getDevice() const
 		{
@@ -109,16 +114,21 @@ namespace vkfw
 		void finalize();
 		void render();
 		void present();
+		void resize(uint32_t width, uint32_t height);
+
+#ifdef vkfwWindows
+		friend LRESULT CALLBACK wndProc(HWND, UINT, WPARAM, LPARAM);
+#endif
 
 		ApplicationSettings m_settings;
 		uint32_t m_width{0};
 		uint32_t m_height{0};
 		uint32_t m_maxSimultaneousFrames{0};
 		bool m_running{false};
-#if defined _WIN32 || defined _WIN64
+#if defined vkfwWindows
 		HINSTANCE m_hInstance{nullptr};
 		HWND m_hWnd{nullptr};
-#elif __linux__ && !__ANDROID__
+#elif defined vkfwLinux
 		Display *m_display{nullptr};
 		Window m_window{None};
 		VisualID m_visualId{None};

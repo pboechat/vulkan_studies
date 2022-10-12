@@ -1,14 +1,19 @@
 #include <vkfw/Application.h>
 
-#if __linux__ && !__ANDROID__
+#ifdef vkfwLinux
 #include <X11/Xutil.h>
 #endif
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstring>
 #include <functional>
 #include <iostream>
+
+#ifdef vkfwWindows
+static Application *s_application = nullptr;
+#endif
 
 namespace
 {
@@ -41,16 +46,16 @@ namespace
 	}
 
 	bool supportsPresentation(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIdx, VkSurfaceKHR surface
-#if __linux__ && !__ANDROID__
+#ifdef vkfwLinux
 							  ,
 							  Display *display, VisualID visualId
 #endif
 	)
 	{
 		VkBool32 supportsPresentation_;
-#if defined _WIN32 || defined _WIN64
+#if defined vkfwWindows
 		supportsPresentation_ = vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, queueFamilyIdx);
-#elif __linux__ && !__ANDROID__
+#elif defined vkfwLinux
 		supportsPresentation_ = vkGetPhysicalDeviceXlibPresentationSupportKHR(physicalDevice, queueFamilyIdx, display, visualId);
 #else
 #error "don't know how to check presentation support"
@@ -68,9 +73,20 @@ namespace
 
 namespace vkfw
 {
+#ifdef vkfwWindows
+	Application::Application()
+	{
+		assert(s_application == nullptr);
+		s_application = this;
+	}
+#endif
+
 	Application::~Application()
 	{
 		finalize();
+#ifdef vkfwWindows
+		s_application = nullptr;
+#endif
 	}
 
 	void Application::initialize(const ApplicationSettings &settings)
@@ -151,9 +167,9 @@ namespace vkfw
 		extensions.emplace_back("VK_KHR_surface");
 
 		const char *platformSurfaceExtName =
-#if defined _WIN32 || defined _WIN64
+#if defined vkfwWindows
 			"VK_KHR_win32_surface"
-#elif __linux__ && !__ANDROID__
+#elif defined vkfwLinux
 			VK_KHR_XLIB_SURFACE_EXTENSION_NAME
 #else
 #error "don't know how to enable surfaces in the current platform"
@@ -189,7 +205,7 @@ namespace vkfw
 
 	void Application::createSurface()
 	{
-#if defined _WIN32 || defined _WIN64
+#if defined vkfwWindows
 		VkWin32SurfaceCreateInfoKHR surfaceCreateInfo;
 		surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 		surfaceCreateInfo.pNext = nullptr;
@@ -197,7 +213,7 @@ namespace vkfw
 		surfaceCreateInfo.hinstance = m_hInstance;
 		surfaceCreateInfo.hwnd = m_hWnd;
 		vkfwCheckVkResult(vkCreateWin32SurfaceKHR(m_instance, &surfaceCreateInfo, getAllocationCallbacks(), &m_surface));
-#elif __linux__ && !__ANDROID__
+#elif defined vkfwLinux
 		VkXlibSurfaceCreateInfoKHR surfaceCreateInfo;
 		surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
 		surfaceCreateInfo.pNext = nullptr;
@@ -259,7 +275,7 @@ namespace vkfw
 				if (
 					(queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 &&
 					supportsPresentation(physicalDevice_, queueFamilyIdx, m_surface
-#if __linux__ && !__ANDROID__
+#ifdef vkfwLinux
 										 ,
 										 m_display, m_visualId
 #endif
@@ -494,7 +510,7 @@ namespace vkfw
 	void Application::run()
 	{
 		m_running = true;
-#if defined _WIN32 || defined _WIN64
+#if defined vkfwWindows
 		while (m_running)
 		{
 			runOneFrame();
@@ -510,7 +526,7 @@ namespace vkfw
 				DispatchMessage(&msg);
 			}
 		}
-#elif __linux__ && !__ANDROID__
+#elif defined vkfwLinux
 		XEvent event;
 		while (m_running)
 		{
@@ -533,6 +549,14 @@ namespace vkfw
 					m_running = false;
 				}
 			}
+			else if (event.type == ConfigureNotify)
+			{
+				auto xce = event.xconfigure;
+				if (m_width != (uint32_t)xce.width || m_height != (uint32_t)xce.height)
+				{
+					resize((uint32_t)xce.width, (uint32_t)xce.height);
+				}
+			}
 		}
 #else
 #error "don't know how to run"
@@ -549,7 +573,7 @@ namespace vkfw
 		present();
 	}
 
-#if defined _WIN32 || defined _WIN64
+#ifdef vkfwWindows
 	LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		switch (uMsg)
@@ -571,6 +595,9 @@ namespace vkfw
 				break;
 			}
 			break;
+		case WM_SIZE:
+			s_application->resize((uint32_t)LOWORD(lParam), (uint32_t)HIWORD(lParam));
+			break;
 		default:
 			break;
 		}
@@ -580,7 +607,7 @@ namespace vkfw
 
 	void Application::initializePresentationLayer()
 	{
-#if defined _WIN32 || defined _WIN64
+#if defined vkfwWindows
 		constexpr char *const c_className = "VkfwClass";
 		m_hInstance = GetModuleHandle(nullptr);
 		WNDCLASSEX windowClass;
@@ -627,7 +654,7 @@ namespace vkfw
 		}
 		ShowWindow(m_hWnd, SW_SHOW);
 		UpdateWindow(m_hWnd);
-#elif __linux__ && !__ANDROID__
+#elif defined vkfwLinux
 		m_display = XOpenDisplay(nullptr);
 		if (m_display == nullptr)
 		{
@@ -648,13 +675,13 @@ namespace vkfw
 
 	void Application::finalizePresentationLayer()
 	{
-#if defined _WIN32 || defined _WIN64
+#if defined vkfwWindows
 		if (m_hWnd != nullptr)
 		{
 			DestroyWindow(m_hWnd);
 			m_hWnd = nullptr;
 		}
-#elif __linux__ && !__ANDROID__
+#elif defined vkfwLinux
 		if (m_display == nullptr)
 		{
 			return;
@@ -758,5 +785,13 @@ namespace vkfw
 		}
 
 		m_currentFrame = (m_currentFrame + 1) % m_maxSimultaneousFrames;
+	}
+
+	void Application::resize(uint32_t width, uint32_t height)
+	{
+		m_width = width;
+		m_height = height;
+		// TODO:
+		onResize(width, height);
 	}
 }
