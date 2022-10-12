@@ -725,8 +725,9 @@ namespace vkfw
 		case VK_SUCCESS:
 			break;
 		case VK_SUBOPTIMAL_KHR:
+			break;
 		case VK_ERROR_OUT_OF_DATE_KHR:
-			recreateSwapChainAndGetImages();
+			fail("outdated swapchain");
 			break;
 		default:
 			fail("couldn't acquire new swapchain image");
