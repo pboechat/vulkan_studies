@@ -10,7 +10,7 @@ void createRenderPass(VkDevice device, const VkAllocationCallbacks *allocCbs, Vk
     colorAttachmentDescription.flags = 0;
     colorAttachmentDescription.format = swapChainFormat;
     colorAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
-    colorAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     colorAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -118,14 +118,20 @@ void createGraphicsPipeline(VkDevice device, const VkAllocationCallbacks *allocC
     inputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
     graphicsPipelineCreateInfo.pInputAssemblyState = &inputAssemblyStateCreateInfo;
 
+    VkViewport viewport{};
+    VkRect2D scissorRect{};
+
     VkPipelineViewportStateCreateInfo viewportStateCreateInfo;
     viewportStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewportStateCreateInfo.pNext = nullptr;
     viewportStateCreateInfo.flags = 0;
-    viewportStateCreateInfo.viewportCount = 0;
-    viewportStateCreateInfo.pViewports = nullptr;
-    viewportStateCreateInfo.scissorCount = 0;
-    viewportStateCreateInfo.pScissors = nullptr;
+    // even though we define viewport and scissor as dynamic states, we need to setup them
+    // cause spec states that if the multiple viewports feature is not enabled, viewportCount/scissorCount must be 1
+    // source: https://www.khronos.org/registry/vulkan/specs/1.1-extensions/html/vkspec.html#VUID-VkPipelineViewportStateCreateInfo-viewportCount-01216
+    viewportStateCreateInfo.viewportCount = 1;
+    viewportStateCreateInfo.pViewports = &viewport;
+    viewportStateCreateInfo.scissorCount = 1;
+    viewportStateCreateInfo.pScissors = &scissorRect;
     graphicsPipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
 
     VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo;
@@ -280,8 +286,9 @@ void beginRenderPass(VkCommandBuffer commandBuffer, VkRenderPass renderPass, uin
     renderPassBeginInfo.renderPass = renderPass;
     renderPassBeginInfo.framebuffer = framebuffer;
     renderPassBeginInfo.renderArea = {{0, 0}, {width, height}};
-    renderPassBeginInfo.clearValueCount = 0;
-    renderPassBeginInfo.pClearValues = nullptr;
+    renderPassBeginInfo.clearValueCount = 1;
+    VkClearValue clearValue = {0, 0, 0, 1};
+    renderPassBeginInfo.pClearValues = &clearValue;
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
