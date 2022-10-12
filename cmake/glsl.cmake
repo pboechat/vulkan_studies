@@ -16,8 +16,8 @@ function(add_glsl)
     endforeach(ARG_IDX)
     add_custom_target(
         ${ARGV0}_GLSL_SPIRV_FILES
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${OUT_DIR}/spirv"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${SPIRV_DIR}" "${OUT_DIR}/spirv"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${OUT_DIR}/$<CONFIG>/spirv"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${SPIRV_DIR}" "${OUT_DIR}/$<CONFIG>/spirv"
         DEPENDS ${GLSL_SPIRV_FILES}
     )
     add_dependencies(${ARGV0} ${ARGV0}_GLSL_SPIRV_FILES)
