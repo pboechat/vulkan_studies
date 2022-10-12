@@ -175,14 +175,14 @@ namespace vkfw
 		instanceCreateInfo.enabledExtensionCount = (uint32_t)extensions.size();
 		instanceCreateInfo.ppEnabledExtensionNames = extensions.empty() ? nullptr : &extensions[0];
 
-		vkfwCheckVkResult(vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance));
+		vkfwCheckVkResult(vkCreateInstance(&instanceCreateInfo, getAllocationCallbacks(), &m_instance));
 	}
 
 	void Application::destroyInstance()
 	{
 		if (m_instance != VK_NULL_HANDLE)
 		{
-			vkDestroyInstance(m_instance, nullptr);
+			vkDestroyInstance(m_instance, getAllocationCallbacks());
 			m_instance = VK_NULL_HANDLE;
 		}
 	}
@@ -196,7 +196,7 @@ namespace vkfw
 		surfaceCreateInfo.flags = 0;
 		surfaceCreateInfo.hinstance = m_hInstance;
 		surfaceCreateInfo.hwnd = m_hWnd;
-		vkfwCheckVkResult(vkCreateWin32SurfaceKHR(m_instance, &surfaceCreateInfo, nullptr, &m_surface));
+		vkfwCheckVkResult(vkCreateWin32SurfaceKHR(m_instance, &surfaceCreateInfo, getAllocationCallbacks(), &m_surface));
 #elif __linux__ && !__ANDROID__
 		VkXlibSurfaceCreateInfoKHR surfaceCreateInfo;
 		surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
@@ -204,7 +204,7 @@ namespace vkfw
 		surfaceCreateInfo.flags = 0;
 		surfaceCreateInfo.dpy = m_display;
 		surfaceCreateInfo.window = m_window;
-		vkfwCheckVkResult(vkCreateXlibSurfaceKHR(m_instance, &surfaceCreateInfo, nullptr, &m_surface));
+		vkfwCheckVkResult(vkCreateXlibSurfaceKHR(m_instance, &surfaceCreateInfo, getAllocationCallbacks(), &m_surface));
 #else
 #error "don't know how to create presentation surface"
 #endif
@@ -214,7 +214,7 @@ namespace vkfw
 	{
 		if (m_surface != VK_NULL_HANDLE)
 		{
-			vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+			vkDestroySurfaceKHR(m_instance, m_surface, getAllocationCallbacks());
 			m_surface = VK_NULL_HANDLE;
 		}
 	}
@@ -309,7 +309,7 @@ namespace vkfw
 		deviceCreateInfo.ppEnabledLayerNames = nullptr;
 		deviceCreateInfo.pEnabledFeatures = nullptr;
 
-		vkfwCheckVkResult(vkCreateDevice(m_physicalDevice, &deviceCreateInfo, nullptr, &m_device));
+		vkfwCheckVkResult(vkCreateDevice(m_physicalDevice, &deviceCreateInfo, getAllocationCallbacks(), &m_device));
 
 		vkGetDeviceQueue(m_device, m_graphicsAndPresentQueueIndex, 0, &m_graphicsAndPresentQueue);
 	}
@@ -318,7 +318,7 @@ namespace vkfw
 	{
 		if (m_device != VK_NULL_HANDLE)
 		{
-			vkDestroyDevice(m_device, nullptr);
+			vkDestroyDevice(m_device, getAllocationCallbacks());
 			m_device = VK_NULL_HANDLE;
 		}
 		m_graphicsAndPresentQueue = VK_NULL_HANDLE;
@@ -403,7 +403,7 @@ namespace vkfw
 		swapChainCreateInfo.clipped = VK_TRUE;
 		swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
-		vkfwCheckVkResult(vkCreateSwapchainKHR(m_device, &swapChainCreateInfo, nullptr, &m_swapChain));
+		vkfwCheckVkResult(vkCreateSwapchainKHR(m_device, &swapChainCreateInfo, getAllocationCallbacks(), &m_swapChain));
 
 		vkfwCheckVkResult(vkGetSwapchainImagesKHR(m_device, m_swapChain, &swapChainCount, nullptr));
 		m_swapChainImages.resize(swapChainCount);
@@ -414,7 +414,7 @@ namespace vkfw
 	{
 		if (m_swapChain != VK_NULL_HANDLE)
 		{
-			vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+			vkDestroySwapchainKHR(m_device, m_swapChain, getAllocationCallbacks());
 			m_swapChain = VK_NULL_HANDLE;
 		}
 		m_swapChainImages.clear();
@@ -437,9 +437,9 @@ namespace vkfw
 		semaphoreCreateInfo.flags = 0;
 		for (uint32_t i = 0; i < m_maxSimultaneousFrames; ++i)
 		{
-			vkfwCheckVkResult(vkCreateFence(m_device, &fenceInfo, nullptr, &m_frameFences[i]));
-			vkfwCheckVkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_acquireSwapChainImageSemaphores[i]));
-			vkfwCheckVkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_submitFinishedSemaphores[i]));
+			vkfwCheckVkResult(vkCreateFence(m_device, &fenceInfo, getAllocationCallbacks(), &m_frameFences[i]));
+			vkfwCheckVkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, getAllocationCallbacks(), &m_acquireSwapChainImageSemaphores[i]));
+			vkfwCheckVkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, getAllocationCallbacks(), &m_submitFinishedSemaphores[i]));
 		}
 	}
 
@@ -447,9 +447,9 @@ namespace vkfw
 	{
 		for (uint32_t i = 0; i < m_maxSimultaneousFrames; ++i)
 		{
-			vkDestroySemaphore(m_device, m_acquireSwapChainImageSemaphores[i], nullptr);
-			vkDestroySemaphore(m_device, m_submitFinishedSemaphores[i], nullptr);
-			vkDestroyFence(m_device, m_frameFences[i], nullptr);
+			vkDestroySemaphore(m_device, m_acquireSwapChainImageSemaphores[i], getAllocationCallbacks());
+			vkDestroySemaphore(m_device, m_submitFinishedSemaphores[i], getAllocationCallbacks());
+			vkDestroyFence(m_device, m_frameFences[i], getAllocationCallbacks());
 		}
 	}
 
@@ -460,7 +460,7 @@ namespace vkfw
 		commandPoolCreateInfo.pNext = nullptr;
 		commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 		commandPoolCreateInfo.queueFamilyIndex = m_graphicsAndPresentQueueIndex;
-		vkfwCheckVkResult(vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPool));
+		vkfwCheckVkResult(vkCreateCommandPool(m_device, &commandPoolCreateInfo, getAllocationCallbacks(), &m_commandPool));
 
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo;
 		commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -481,7 +481,7 @@ namespace vkfw
 				vkFreeCommandBuffers(m_device, m_commandPool, (uint32_t)m_commandBuffers.size(), &m_commandBuffers[0]);
 				m_commandBuffers.clear();
 			}
-			vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+			vkDestroyCommandPool(m_device, m_commandPool, getAllocationCallbacks());
 			m_commandPool = VK_NULL_HANDLE;
 		}
 	}
