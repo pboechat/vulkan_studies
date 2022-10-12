@@ -10,8 +10,9 @@
 #ifdef vkfwWindows
 #define NOMINMAX
 #include <windows.h>
-#else
+#elif defined vkfwLinux
 #include <X11/Xlib.h>
+#include <X11/Xutil.h>
 #endif
 
 #if defined vkfwWindows
@@ -203,10 +204,10 @@ namespace vkfw
 #define vkfwKeyUp VK_UP
 #define vkfwKeyDown VK_DOWN
 #elif defined vkfwLinux
-#define vkfwKeyLeft 0
-#define vkfwKeyRight 0
-#define vkfwKeyUp 0
-#define vkfwKeyDown 0
+#define vkfwKeyLeft XK_Left
+#define vkfwKeyRight XK_Right
+#define vkfwKeyUp XK_Up
+#define vkfwKeyDown XK_Down
 #endif
 
 #endif

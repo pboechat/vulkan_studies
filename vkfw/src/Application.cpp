@@ -1,9 +1,5 @@
 #include <vkfw/Application.h>
 
-#ifdef vkfwLinux
-#include <X11/Xutil.h>
-#endif
-
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -562,6 +558,17 @@ namespace vkfw
 				{
 					m_running = false;
 				}
+				else
+				{
+					keyDown((uint32_t)keySym);
+				}
+			}
+			else if (event.type == KeyRelease)
+			{
+				char buf[128] = {0};
+				KeySym keySym;
+				XLookupString(&event.xkey, buf, sizeof buf, &keySym, NULL);
+				keyUp((uint32_t)keySym);
 			}
 			else if (event.type == ClientMessage)
 			{
