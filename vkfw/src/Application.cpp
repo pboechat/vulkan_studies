@@ -40,8 +40,9 @@ namespace
 							{ return _StrComparer<ElementType>::compare(element, value); }) != vector.end();
 	}
 
-	bool supportsPresentation(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIdx, VkSurfaceKHR surface,
+	bool supportsPresentation(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIdx, VkSurfaceKHR surface
 #if __linux__ && !__ANDROID__
+							  ,
 							  Display *display, VisualID visualId
 #endif
 	)
