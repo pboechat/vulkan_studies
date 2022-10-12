@@ -34,7 +34,7 @@ namespace vkfw
 		void initialize(const ApplicationSettings &settings);
 		virtual ~Application();
 
-		void run();
+		void run(int argc, char **argv);
 
 		inline const char *getName() const
 		{
@@ -45,8 +45,11 @@ namespace vkfw
 		virtual void postInitialize() {}
 		virtual void update() {}
 		virtual void record(VkCommandBuffer commandBuffer) {}
-		virtual void onStop() {}
-		virtual void onResize(uint32_t width, uint32_t height) {}
+		virtual bool preRun(int argc, char **argv) { return true; }
+		virtual void postRun() {}
+		virtual void postResize(uint32_t width, uint32_t height) {}
+		virtual void keyDown(uint32_t keyCode) {}
+		virtual void keyUp(uint32_t keyCode) {}
 
 		inline VkDevice getDevice() const
 		{
@@ -73,6 +76,11 @@ namespace vkfw
 			return m_maxSimultaneousFrames;
 		}
 
+		inline uint32_t getCurrentFrame() const
+		{
+			return m_currentFrame;
+		}
+
 		inline size_t getSwapChainCount() const
 		{
 			return m_swapChainImages.size();
@@ -91,6 +99,18 @@ namespace vkfw
 		inline const VkAllocationCallbacks *getAllocationCallbacks() const
 		{
 			return m_allocationCallbacks.get();
+		}
+
+		uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
+
+		inline uint32_t getGraphicsQueueFamilyIndex() const
+		{
+			return m_graphicsAndPresentQueueFamilyIndex;
+		}
+
+		inline uint32_t getPresentQueueFamilyIndex() const
+		{
+			return m_graphicsAndPresentQueueFamilyIndex;
 		}
 
 	private:
@@ -141,7 +161,7 @@ namespace vkfw
 		VkPhysicalDeviceMemoryProperties m_physicalDeviceMemoryProperties;
 		std::unique_ptr<VkAllocationCallbacks> m_allocationCallbacks{nullptr};
 		VkDevice m_device{VK_NULL_HANDLE};
-		uint32_t m_graphicsAndPresentQueueIndex{gc_invalidQueueIndex};
+		uint32_t m_graphicsAndPresentQueueFamilyIndex{gc_invalidQueueIndex};
 		VkQueue m_graphicsAndPresentQueue{VK_NULL_HANDLE};
 		VkSurfaceTransformFlagBitsKHR m_preTransform;
 		VkPresentModeKHR m_presentMode;

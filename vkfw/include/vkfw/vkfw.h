@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <cassert>
 #include <fstream>
+#include <memory>
 #include <vector>
 #include <string>
 
@@ -59,20 +60,26 @@ namespace vkfw
 		}
 	};
 
-	inline void fail(const char *msg)
+	template <typename... args_t>
+	inline void fail(const char *msg, args_t... args)
 	{
 #ifdef vkfwWindows
-		MessageBox(nullptr, msg, "FAILURE", MB_ICONERROR | MB_OK);
+		char buffer[1024];
+		sprintf_s(buffer, msg, args...);
+		MessageBox(nullptr, buffer, "FAILURE", MB_ICONERROR | MB_OK);
 #else
-		printf("%s", msg);
+		printf("%s", msg, args...);
 #endif
 		exit(-1);
 	}
 
-	inline void warn(const char *msg)
+	template <typename... args_t>
+	inline void warn(const char *msg, args_t... args)
 	{
 #ifdef vkfwWindows
-		MessageBox(nullptr, msg, "WARNING", MB_ICONWARNING | MB_OK);
+		char buffer[1024];
+		sprintf_s(buffer, msg, args...);
+		MessageBox(nullptr, buffer, "WARNING", MB_ICONWARNING | MB_OK);
 #else
 		printf("%s", msg);
 #endif
@@ -115,7 +122,13 @@ namespace vkfw
 		}
 	}
 
-	inline std::vector<char> readFile(const std::string &filename)
+	struct FileData
+	{
+		std::unique_ptr<char[]> value;
+		size_t size;
+	};
+
+	inline FileData readFile(const std::string &filename)
 	{
 		std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
@@ -125,12 +138,12 @@ namespace vkfw
 		}
 
 		auto bufferSize = file.tellg();
-		std::vector<char> buffer(bufferSize);
+		auto buffer = std::make_unique<char[]>(bufferSize);
 		file.seekg(0);
-		file.read(buffer.data(), bufferSize);
+		file.read(buffer.get(), bufferSize);
 		file.close();
 
-		return buffer;
+		return {std::move(buffer), (size_t)bufferSize};
 	}
 
 }
@@ -163,5 +176,19 @@ namespace vkfw
 	}
 
 #define vkfwArraySize(arr) sizeof(arr) / sizeof(arr[0])
+
+#define vkfwDegToRad 0.0174532925f
+
+#if defined vkfwWindows
+#define vkfwKeyLeft VK_LEFT
+#define vkfwKeyRight VK_RIGHT
+#define vkfwKeyUp VK_UP
+#define vkfwKeyDown VK_DOWN
+#elif defined vkfwLinux
+#define vkfwKeyLeft 0
+#define vkfwKeyRight 0
+#define vkfwKeyUp 0
+#define vkfwKeyDown 0
+#endif
 
 #endif

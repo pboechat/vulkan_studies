@@ -89,6 +89,18 @@ namespace vkfw
 #endif
 	}
 
+	uint32_t Application::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const
+	{
+		for (uint32_t i = 0; i < m_physicalDeviceMemoryProperties.memoryTypeCount; ++i)
+		{
+			if ((typeFilter & (1 << i)) && (m_physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
+			{
+				return i;
+			}
+		}
+		return ~0;
+	}
+
 	void Application::initialize(const ApplicationSettings &settings)
 	{
 		m_settings = settings;
@@ -281,9 +293,9 @@ namespace vkfw
 #endif
 										 ))
 				{
-					m_graphicsAndPresentQueueIndex = queueFamilyIdx;
+					m_graphicsAndPresentQueueFamilyIndex = queueFamilyIdx;
 				}
-				if (m_graphicsAndPresentQueueIndex != gc_invalidQueueIndex)
+				if (m_graphicsAndPresentQueueFamilyIndex != gc_invalidQueueIndex)
 				{
 					m_physicalDevice = physicalDevice_;
 					return;
@@ -305,7 +317,7 @@ namespace vkfw
 		deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		deviceQueueCreateInfo.pNext = nullptr;
 		deviceQueueCreateInfo.flags = 0;
-		deviceQueueCreateInfo.queueFamilyIndex = m_graphicsAndPresentQueueIndex;
+		deviceQueueCreateInfo.queueFamilyIndex = m_graphicsAndPresentQueueFamilyIndex;
 		deviceQueueCreateInfo.queueCount = 1;
 		deviceQueueCreateInfo.pQueuePriorities = sc_queuePriorities;
 
@@ -327,7 +339,7 @@ namespace vkfw
 
 		vkfwCheckVkResult(vkCreateDevice(m_physicalDevice, &deviceCreateInfo, getAllocationCallbacks(), &m_device));
 
-		vkGetDeviceQueue(m_device, m_graphicsAndPresentQueueIndex, 0, &m_graphicsAndPresentQueue);
+		vkGetDeviceQueue(m_device, m_graphicsAndPresentQueueFamilyIndex, 0, &m_graphicsAndPresentQueue);
 	}
 
 	void Application::destroyDeviceAndClearQueues()
@@ -338,7 +350,7 @@ namespace vkfw
 			m_device = VK_NULL_HANDLE;
 		}
 		m_graphicsAndPresentQueue = VK_NULL_HANDLE;
-		m_graphicsAndPresentQueueIndex = gc_invalidQueueIndex;
+		m_graphicsAndPresentQueueFamilyIndex = gc_invalidQueueIndex;
 	}
 
 	void Application::createSwapChainAndGetImages()
@@ -480,7 +492,7 @@ namespace vkfw
 		commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 		commandPoolCreateInfo.pNext = nullptr;
 		commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		commandPoolCreateInfo.queueFamilyIndex = m_graphicsAndPresentQueueIndex;
+		commandPoolCreateInfo.queueFamilyIndex = m_graphicsAndPresentQueueFamilyIndex;
 		vkfwCheckVkResult(vkCreateCommandPool(m_device, &commandPoolCreateInfo, getAllocationCallbacks(), &m_commandPool));
 
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo;
@@ -512,8 +524,12 @@ namespace vkfw
 		vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &m_physicalDeviceMemoryProperties);
 	}
 
-	void Application::run()
+	void Application::run(int argc, char **argv)
 	{
+		if (!preRun(argc, argv))
+		{
+			return;
+		}
 		m_running = true;
 #if defined vkfwWindows
 		while (m_running)
@@ -564,7 +580,7 @@ namespace vkfw
 #endif
 		vkDeviceWaitIdle(m_device);
 
-		onStop();
+		postRun();
 	}
 
 	void Application::runOneFrame()
@@ -583,18 +599,19 @@ namespace vkfw
 			PostQuitMessage(0);
 			break;
 		case WM_KEYDOWN:
-			int fwKeys;
-			LPARAM keyData;
-			fwKeys = (int)wParam;
-			keyData = lParam;
-			switch (fwKeys)
+		{
+			auto keyCode = (uint32_t)wParam;
+			if (keyCode == VK_ESCAPE)
 			{
-			case VK_ESCAPE:
 				PostQuitMessage(0);
-				break;
-			default:
-				break;
 			}
+			else
+			{
+				s_application->keyDown(keyCode);
+			}
+		}
+		case WM_KEYUP:
+			s_application->keyUp((uint32_t)wParam);
 			break;
 		case WM_SIZE:
 			s_application->tryResize((uint32_t)LOWORD(lParam), (uint32_t)HIWORD(lParam));
@@ -801,6 +818,6 @@ namespace vkfw
 
 		recreateSwapChainAndGetImages();
 
-		onResize(width, height);
+		postResize(width, height);
 	}
 }
