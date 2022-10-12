@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
 
-include(../cmake/glsl.cmake)
+include(../../cmake/glsl.cmake)
 
-project(sample C CXX)
+project(triangle C CXX)
 
 find_package(Vulkan REQUIRED)
 if(LINUX) 

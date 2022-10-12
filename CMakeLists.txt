@@ -22,4 +22,4 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug" AND LINUX)
 endif()
 
 add_subdirectory(vkfw)
-add_subdirectory(sample)
+add_subdirectory(samples)
