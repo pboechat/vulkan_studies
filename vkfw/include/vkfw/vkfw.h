@@ -60,29 +60,47 @@ namespace vkfw
 		}
 	};
 
-	template <typename... args_t>
-	inline void fail(const char *msg, args_t... args)
+	inline void fail(const char *msg)
 	{
 #ifdef vkfwWindows
-		char buffer[1024];
-		sprintf_s(buffer, msg, args...);
-		MessageBox(nullptr, buffer, "FAILURE", MB_ICONERROR | MB_OK);
+		MessageBox(nullptr, msg, "FAILURE", MB_ICONERROR | MB_OK);
 #else
-		printf("%s", msg, args...);
+		printf("%s", msg);
 #endif
 		exit(-1);
 	}
 
 	template <typename... args_t>
-	inline void warn(const char *msg, args_t... args)
+	inline void fail(const char *fmt, args_t... args)
+	{
+		char msg[1024];
+#ifdef vkfwWindows
+		sprintf_s(msg, fmt, args...);
+#else
+		sprintf(msg, fmt, args...);
+#endif
+		fail(msg);
+	}
+
+	inline void warn(const char *msg)
 	{
 #ifdef vkfwWindows
-		char buffer[1024];
-		sprintf_s(buffer, msg, args...);
-		MessageBox(nullptr, buffer, "WARNING", MB_ICONWARNING | MB_OK);
+		MessageBox(nullptr, msg, "WARNING", MB_ICONWARNING | MB_OK);
 #else
 		printf("%s", msg);
 #endif
+	}
+
+	template <typename... args_t>
+	inline void warn(const char *fmt, args_t... args)
+	{
+		char msg[1024];
+#ifdef vkfwWindows
+		sprintf_s(msg, fmt, args...);
+#else
+		sprintf(msg, fmt, args...);
+#endif
+		warn(msg);
 	}
 
 	inline const char *getVkErrorString(VkResult errorCode)
