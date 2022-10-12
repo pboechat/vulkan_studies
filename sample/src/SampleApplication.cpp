@@ -4,7 +4,7 @@
 
 #include <cassert>
 
-void createRenderPass(VkDevice device, const VkAllocationCallbacks *allocCbs, VkFormat swapChainFormat, VkRenderPass &renderPass)
+void createRenderPass(VkDevice device, const VkAllocationCallbacks *allocCb, VkFormat swapChainFormat, VkRenderPass &renderPass)
 {
     VkAttachmentDescription colorAttachmentDescription;
     colorAttachmentDescription.flags = 0;
@@ -44,10 +44,10 @@ void createRenderPass(VkDevice device, const VkAllocationCallbacks *allocCbs, Vk
     renderPassCreateInfo.dependencyCount = 0;
     renderPassCreateInfo.pDependencies = nullptr;
 
-    vkfwCheckVkResult(vkCreateRenderPass(device, &renderPassCreateInfo, allocCbs, &renderPass));
+    vkfwCheckVkResult(vkCreateRenderPass(device, &renderPassCreateInfo, allocCb, &renderPass));
 }
 
-void createPipelineLayout(VkDevice device, const VkAllocationCallbacks *allocCbs, VkPipelineLayout &pipelineLayout)
+void createPipelineLayout(VkDevice device, const VkAllocationCallbacks *allocCb, VkPipelineLayout &pipelineLayout)
 {
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo;
     pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -58,7 +58,7 @@ void createPipelineLayout(VkDevice device, const VkAllocationCallbacks *allocCbs
     pipelineLayoutCreateInfo.pushConstantRangeCount = 0;
     pipelineLayoutCreateInfo.pPushConstantRanges = nullptr;
 
-    vkfwCheckVkResult(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, allocCbs, &pipelineLayout));
+    vkfwCheckVkResult(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, allocCb, &pipelineLayout));
 }
 
 void initShaderStageCreateInfo(VkShaderModule module, VkShaderStageFlagBits stage, VkPipelineShaderStageCreateInfo &shaderStageCreateInfo)
@@ -72,7 +72,7 @@ void initShaderStageCreateInfo(VkShaderModule module, VkShaderStageFlagBits stag
     shaderStageCreateInfo.pSpecializationInfo = nullptr;
 }
 
-void createGraphicsPipeline(VkDevice device, const VkAllocationCallbacks *allocCbs, VkShaderModule vertModule, VkShaderModule fragModule, VkPipelineLayout pipelineLayout, VkRenderPass renderPass, VkPipeline &pipeline)
+void createGraphicsPipeline(VkDevice device, const VkAllocationCallbacks *allocCb, VkShaderModule vertModule, VkShaderModule fragModule, VkPipelineLayout pipelineLayout, VkRenderPass renderPass, VkPipeline &pipeline)
 {
     VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo;
     graphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -188,10 +188,10 @@ void createGraphicsPipeline(VkDevice device, const VkAllocationCallbacks *allocC
 
     graphicsPipelineCreateInfo.pDepthStencilState = nullptr;
 
-    vkfwCheckVkResult(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, allocCbs, &pipeline));
+    vkfwCheckVkResult(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, allocCb, &pipeline));
 }
 
-void createImageView(VkDevice device, const VkAllocationCallbacks *allocCbs, VkFormat format, VkImage image, VkImageView &imageView)
+void createImageView(VkDevice device, const VkAllocationCallbacks *allocCb, VkFormat format, VkImage image, VkImageView &imageView)
 {
     VkImageViewCreateInfo imageViewCreateInfo;
     imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -207,10 +207,10 @@ void createImageView(VkDevice device, const VkAllocationCallbacks *allocCbs, VkF
     imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
     imageViewCreateInfo.subresourceRange.layerCount = 1;
 
-    vkfwCheckVkResult(vkCreateImageView(device, &imageViewCreateInfo, allocCbs, &imageView));
+    vkfwCheckVkResult(vkCreateImageView(device, &imageViewCreateInfo, allocCb, &imageView));
 }
 
-void createFramebuffer(VkDevice device, const VkAllocationCallbacks *allocCbs, VkRenderPass renderPass, VkImageView imageView, uint32_t width, uint32_t height, VkFramebuffer &framebuffer)
+void createFramebuffer(VkDevice device, const VkAllocationCallbacks *allocCb, VkRenderPass renderPass, VkImageView imageView, uint32_t width, uint32_t height, VkFramebuffer &framebuffer)
 {
     VkFramebufferCreateInfo framebufferCreateInfo;
     framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -223,59 +223,45 @@ void createFramebuffer(VkDevice device, const VkAllocationCallbacks *allocCbs, V
     framebufferCreateInfo.height = height;
     framebufferCreateInfo.layers = 1;
 
-    vkfwCheckVkResult(vkCreateFramebuffer(device, &framebufferCreateInfo, allocCbs, &framebuffer));
+    vkfwCheckVkResult(vkCreateFramebuffer(device, &framebufferCreateInfo, allocCb, &framebuffer));
 }
 
 void SampleApplication::postInitialize()
 {
-    const auto *allocCbs = getAllocationCallbacks();
+    createRenderPass(getDevice(), getAllocationCallbacks(), getSwapChainSurfaceFormat().format, m_renderPass);
 
-    createRenderPass(getDevice(), allocCbs, getSwapChainSurfaceFormat().format, m_renderPass);
-
-    createPipelineLayout(getDevice(), allocCbs, m_pipelineLayout);
+    createPipelineLayout(getDevice(), getAllocationCallbacks(), m_pipelineLayout);
 
     m_vertModule = createShaderModule(vkfw::readFile("spirv/triangle.vert.spv"));
     m_fragModule = createShaderModule(vkfw::readFile("spirv/triangle.frag.spv"));
-    createGraphicsPipeline(getDevice(), allocCbs, m_vertModule, m_fragModule, m_pipelineLayout, m_renderPass, m_pipeline);
+    createGraphicsPipeline(getDevice(), getAllocationCallbacks(), m_vertModule, m_fragModule, m_pipelineLayout, m_renderPass, m_pipeline);
 
-    const auto swapChainCount = getSwapChainCount();
-    m_swapChainImageViews.resize(swapChainCount);
-    m_framebuffers.resize(swapChainCount);
-    for (uint32_t i = 0; i < swapChainCount; ++i)
-    {
-        createImageView(getDevice(), allocCbs, getSwapChainSurfaceFormat().format, getSwapChainImage(i), m_swapChainImageViews[i]);
-        createFramebuffer(getDevice(), allocCbs, m_renderPass, m_swapChainImageViews[i], getWidth(), getHeight(), m_framebuffers[i]);
-    }
+    recreateSwapChainImageViewsAndFramebuffers();
 }
 
 void SampleApplication::onStop()
 {
-    const auto *allocCbs = getAllocationCallbacks();
-
-    for (auto &framebuffer : m_framebuffers)
-    {
-        vkDestroyFramebuffer(getDevice(), framebuffer, allocCbs);
-    }
-
-    for (auto &swapChainImageView : m_swapChainImageViews)
-    {
-        vkDestroyImageView(getDevice(), swapChainImageView, allocCbs);
-    }
-
+    destroySwapChainImageViewsAndFramebuffers();
+    
     if (m_pipeline != VK_NULL_HANDLE)
     {
-        vkDestroyPipeline(getDevice(), m_pipeline, allocCbs);
+        vkDestroyPipeline(getDevice(), m_pipeline, getAllocationCallbacks());
     }
     destroyShaderModule(m_fragModule);
     destroyShaderModule(m_vertModule);
     if (m_pipelineLayout != VK_NULL_HANDLE)
     {
-        vkDestroyPipelineLayout(getDevice(), m_pipelineLayout, allocCbs);
+        vkDestroyPipelineLayout(getDevice(), m_pipelineLayout, getAllocationCallbacks());
     }
     if (m_renderPass != VK_NULL_HANDLE)
     {
-        vkDestroyRenderPass(getDevice(), m_renderPass, allocCbs);
+        vkDestroyRenderPass(getDevice(), m_renderPass, getAllocationCallbacks());
     }
+}
+
+void SampleApplication::onResize(uint32_t width, uint32_t height)
+{
+    recreateSwapChainImageViewsAndFramebuffers();
 }
 
 void beginRenderPass(VkCommandBuffer commandBuffer, VkRenderPass renderPass, uint32_t width, uint32_t height, VkFramebuffer framebuffer)
@@ -328,5 +314,31 @@ void SampleApplication::destroyShaderModule(VkShaderModule shaderModule) const
     if (shaderModule != VK_NULL_HANDLE)
     {
         vkDestroyShaderModule(getDevice(), shaderModule, nullptr);
+    }
+}
+
+void SampleApplication::recreateSwapChainImageViewsAndFramebuffers()
+{
+    destroySwapChainImageViewsAndFramebuffers();
+
+    m_swapChainImageViews.resize(getSwapChainCount());
+    m_framebuffers.resize(getSwapChainCount());
+    for (uint32_t i = 0; i < getSwapChainCount(); ++i)
+    {
+        createImageView(getDevice(), getAllocationCallbacks(), getSwapChainSurfaceFormat().format, getSwapChainImage(i), m_swapChainImageViews[i]);
+        createFramebuffer(getDevice(), getAllocationCallbacks(), m_renderPass, m_swapChainImageViews[i], getWidth(), getHeight(), m_framebuffers[i]);
+    }
+}
+
+void SampleApplication::destroySwapChainImageViewsAndFramebuffers()
+{
+    for (auto &framebuffer : m_framebuffers)
+    {
+        vkDestroyFramebuffer(getDevice(), framebuffer, getAllocationCallbacks());
+    }
+
+    for (auto &swapChainImageView : m_swapChainImageViews)
+    {
+        vkDestroyImageView(getDevice(), swapChainImageView, getAllocationCallbacks());
     }
 }

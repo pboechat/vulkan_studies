@@ -105,6 +105,7 @@ namespace vkfw
 		void createDeviceAndGetQueues();
 		void destroyDeviceAndClearQueues();
 		void createSwapChainAndGetImages();
+		void recreateSwapChainAndGetImages();
 		void destroySwapChainAndClearImages();
 		void createSynchronizationObjects();
 		void destroySynchronizationObjects();
@@ -142,7 +143,9 @@ namespace vkfw
 		VkDevice m_device{VK_NULL_HANDLE};
 		uint32_t m_graphicsAndPresentQueueIndex{gc_invalidQueueIndex};
 		VkQueue m_graphicsAndPresentQueue{VK_NULL_HANDLE};
-		VkSwapchainKHR m_swapChain;
+		VkSurfaceTransformFlagBitsKHR m_preTransform;
+		VkPresentModeKHR m_presentMode;
+		VkSwapchainKHR m_swapChain{VK_NULL_HANDLE};
 		VkSurfaceFormatKHR m_swapChainSurfaceFormat;
 		std::vector<VkImage> m_swapChainImages;
 		uint32_t m_swapChainIndex{0};

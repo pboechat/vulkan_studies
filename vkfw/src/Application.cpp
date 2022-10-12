@@ -356,18 +356,16 @@ namespace vkfw
 			fail("invalid height");
 		}
 
-		VkSurfaceTransformFlagBitsKHR preTransform;
 		if ((surfaceCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR) != 0)
 		{
-			preTransform = VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR;
+			m_preTransform = VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR;
 		}
 		else
 		{
-			preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+			m_preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 		}
 
 		m_maxSimultaneousFrames = std::max(std::min(m_settings.maxSimultaneousFrames, surfaceCapabilities.maxImageCount), surfaceCapabilities.minImageCount);
-		auto swapChainCount = m_maxSimultaneousFrames;
 
 		uint32_t surfaceFormatsCount = 0;
 		vkfwCheckVkResult(vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &surfaceFormatsCount, nullptr));
@@ -377,7 +375,6 @@ namespace vkfw
 
 		m_swapChainSurfaceFormat = surfaceFormats[0];
 
-		VkPresentModeKHR presentMode;
 		{
 			uint32_t presentModesCount;
 			vkfwCheckVkResult(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModesCount, nullptr));
@@ -391,20 +388,27 @@ namespace vkfw
 								   { return presentMode == VK_PRESENT_MODE_MAILBOX_KHR; });
 			if (it != presentModes.end())
 			{
-				presentMode = VK_PRESENT_MODE_MAILBOX_KHR; // supposedly, > swapchain image count
+				m_presentMode = VK_PRESENT_MODE_MAILBOX_KHR; // supposedly, > swapchain image count
 			}
 			else
 			{
-				presentMode = VK_PRESENT_MODE_FIFO_KHR;
+				m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
 			}
 		}
+
+		recreateSwapChainAndGetImages();
+	}
+
+	void Application::recreateSwapChainAndGetImages()
+	{
+		destroySwapChainAndClearImages();
 
 		VkSwapchainCreateInfoKHR swapChainCreateInfo;
 		swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 		swapChainCreateInfo.pNext = nullptr;
 		swapChainCreateInfo.flags = 0;
 		swapChainCreateInfo.surface = m_surface;
-		swapChainCreateInfo.minImageCount = swapChainCount;
+		swapChainCreateInfo.minImageCount = m_maxSimultaneousFrames;
 		swapChainCreateInfo.imageFormat = m_swapChainSurfaceFormat.format;
 		swapChainCreateInfo.imageColorSpace = m_swapChainSurfaceFormat.colorSpace;
 		swapChainCreateInfo.imageExtent = {m_width, m_height};
@@ -413,14 +417,15 @@ namespace vkfw
 		swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		swapChainCreateInfo.queueFamilyIndexCount = 0;
 		swapChainCreateInfo.pQueueFamilyIndices = nullptr;
-		swapChainCreateInfo.preTransform = preTransform;
+		swapChainCreateInfo.preTransform = m_preTransform;
 		swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		swapChainCreateInfo.presentMode = presentMode;
+		swapChainCreateInfo.presentMode = m_presentMode;
 		swapChainCreateInfo.clipped = VK_TRUE;
 		swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
 		vkfwCheckVkResult(vkCreateSwapchainKHR(m_device, &swapChainCreateInfo, getAllocationCallbacks(), &m_swapChain));
 
+		uint32_t swapChainCount;
 		vkfwCheckVkResult(vkGetSwapchainImagesKHR(m_device, m_swapChain, &swapChainCount, nullptr));
 		m_swapChainImages.resize(swapChainCount);
 		vkfwCheckVkResult(vkGetSwapchainImagesKHR(m_device, m_swapChain, &swapChainCount, &m_swapChainImages[0]));
@@ -662,7 +667,7 @@ namespace vkfw
 		}
 		int defaultScreen = DefaultScreen(m_display);
 		m_window = XCreateSimpleWindow(m_display, RootWindow(m_display, defaultScreen), 0, 0, m_width, m_height, 1, BlackPixel(m_display, defaultScreen), WhitePixel(m_display, defaultScreen));
-		XSelectInput(m_display, m_window, ExposureMask | KeyPressMask);
+		XSelectInput(m_display, m_window, ExposureMask | KeyPressMask | StructureNotifyMask);
 		XMapWindow(m_display, m_window);
 		XStoreName(m_display, m_window, m_settings.name.c_str());
 		m_visualId = XVisualIDFromVisual(DefaultVisual(m_display, defaultScreen));
@@ -718,10 +723,10 @@ namespace vkfw
 		switch (result)
 		{
 		case VK_SUCCESS:
-		case VK_SUBOPTIMAL_KHR:
 			break;
+		case VK_SUBOPTIMAL_KHR:
 		case VK_ERROR_OUT_OF_DATE_KHR:
-			fail("outdated swapchain");
+			recreateSwapChainAndGetImages();
 			break;
 		default:
 			fail("couldn't acquire new swapchain image");
@@ -791,7 +796,9 @@ namespace vkfw
 	{
 		m_width = width;
 		m_height = height;
-		// TODO:
+
+		recreateSwapChainAndGetImages();
+
 		onResize(width, height);
 	}
 }

@@ -11,10 +11,13 @@ protected:
     void postInitialize() override;
     void record(VkCommandBuffer commandBuffer) override;
     void onStop() override;
+    void onResize(uint32_t width, uint32_t height);
 
 private:
     VkShaderModule createShaderModule(const std::vector<char> &code) const;
     void destroyShaderModule(VkShaderModule shaderModule) const;
+    void recreateSwapChainImageViewsAndFramebuffers();
+    void destroySwapChainImageViewsAndFramebuffers();
 
     VkShaderModule m_vertModule{VK_NULL_HANDLE};
     VkShaderModule m_fragModule{VK_NULL_HANDLE};
