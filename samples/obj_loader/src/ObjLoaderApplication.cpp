@@ -3,6 +3,7 @@
 #define TINYOBJ_LOADER_C_IMPLEMENTATION
 #include "tinyobj_loader_c.h"
 
+#include <cmath>
 #include <iostream>
 #include <functional>
 #include <numeric>
