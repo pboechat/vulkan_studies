@@ -115,7 +115,7 @@ namespace vkfw
 		void finalize();
 		void render();
 		void present();
-		void resize(uint32_t width, uint32_t height);
+		void tryResize(uint32_t width, uint32_t height);
 
 #ifdef vkfwWindows
 		friend LRESULT CALLBACK wndProc(HWND, UINT, WPARAM, LPARAM);

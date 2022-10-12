@@ -11,10 +11,6 @@
 #include <functional>
 #include <iostream>
 
-#ifdef vkfwWindows
-static Application *s_application = nullptr;
-#endif
-
 namespace
 {
 	template <typename AType>
@@ -73,6 +69,10 @@ namespace
 
 namespace vkfw
 {
+#ifdef vkfwWindows
+	static vkfw::Application *s_application = nullptr;
+#endif
+
 #ifdef vkfwWindows
 	Application::Application()
 	{
@@ -556,11 +556,7 @@ namespace vkfw
 			}
 			else if (event.type == ConfigureNotify)
 			{
-				auto xce = event.xconfigure;
-				if (m_width != (uint32_t)xce.width || m_height != (uint32_t)xce.height)
-				{
-					resize((uint32_t)xce.width, (uint32_t)xce.height);
-				}
+				tryResize((uint32_t)event.xconfigure.width, (uint32_t)event.xconfigure.height);
 			}
 		}
 #else
@@ -601,7 +597,7 @@ namespace vkfw
 			}
 			break;
 		case WM_SIZE:
-			s_application->resize((uint32_t)LOWORD(lParam), (uint32_t)HIWORD(lParam));
+			s_application->tryResize((uint32_t)LOWORD(lParam), (uint32_t)HIWORD(lParam));
 			break;
 		default:
 			break;
@@ -793,8 +789,13 @@ namespace vkfw
 		m_currentFrame = (m_currentFrame + 1) % m_maxSimultaneousFrames;
 	}
 
-	void Application::resize(uint32_t width, uint32_t height)
+	void Application::tryResize(uint32_t width, uint32_t height)
 	{
+		if (width == m_width && height == m_height)
+		{
+			return;
+		}
+
 		m_width = width;
 		m_height = height;
 
